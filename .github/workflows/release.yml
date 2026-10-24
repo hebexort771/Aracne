@@ -1,0 +1,93 @@
+# Compila Aracne para Mac, Windows y Linux y sube los instaladores a Releases.
+#
+# Se activa con una etiqueta que empiece con "v" (v1.0.0, v1.1.0…). La forma más fácil:
+# GitHub → Releases → "Draft a new release" → Choose a tag → v1.0.0 → Publish.
+# En unos 15 minutos aparecen los instaladores en esa versión.
+name: Compilar Aracne
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: --mac
+          - os: windows-latest
+            target: --win
+          - os: ubuntu-latest
+            target: --linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Pruebas
+        run: npm test
+
+      - name: Versión desde la etiqueta
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version
+
+      - name: Compilar la interfaz
+        run: npm run build
+
+      - name: Empaquetar
+        run: npx electron-builder ${{ matrix.target }} --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aracne-${{ runner.os }}
+          path: |
+            release/*.dmg
+            release/*.exe
+            release/*.AppImage
+            release/*.deb
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+
+      - name: Publicar en Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          ls -la out
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --title "Aracne ${TAG#v}" --notes-file .github/release-notes.md
+          elif [ -z "$(gh release view "$TAG" --json body --jq .body)" ]; then
+            gh release edit "$TAG" --notes-file .github/release-notes.md
+          fi
+          gh release upload "$TAG" out/* --clobber

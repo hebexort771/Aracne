@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aracne — arañas digitales que leen contigo</title>
+  <meta name="description" content="Pulsa Ctrl + Shift + Espacio sobre cualquier página o PDF y unas arañas digitales verifican tus fuentes, encuentran plazos, resumen, explican imágenes y te ayudan a estudiar. Gratis para Windows, Mac y Linux.">
+  <link rel="icon" href="assets/icon.svg">
+  <style>
+    :root {
+      --bg: #05060b; --surface: #0c0f1a; --line: #1d2238; --line-2: #2a3152;
+      --text: #e2e6f7; --text-2: #b9bfd9; --muted: #8189ab;
+      --cyan: #3cf0ff; --magenta: #ff3fd2; --blue: #5f72ff; --violet: #a98bff; --amber: #ffb547; --green: #3dffa2; --red: #ff4d6d;
+      --ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Ubuntu, sans-serif;
+      --serif: Charter, "Iowan Old Style", Georgia, "Times New Roman", serif;
+      --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 var(--ui); -webkit-font-smoothing: antialiased; }
+    a { color: var(--cyan); }
+    .wrap { max-width: 1160px; margin: 0 auto; padding: 0 20px; }
+    nav { display: flex; align-items: center; justify-content: space-between; padding: 18px 0; }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .02em; color: var(--text); text-decoration: none; }
+    .brand img { width: 30px; height: 30px; }
+    nav .links { display: flex; gap: 20px; font-size: 14px; }
+    nav .links a { color: var(--text-2); text-decoration: none; }
+    nav .links a:hover { color: var(--text); }
+
+    .hero { display: grid; grid-template-columns: 1.05fr 1fr; gap: 40px; align-items: center; padding: 40px 0 70px; }
+    .kicker { font: 600 12px/1.4 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--cyan); }
+    h1 { font-size: clamp(38px, 5.6vw, 62px); line-height: 1.04; margin: 12px 0 18px; letter-spacing: -.02em; }
+    h1 span { background: linear-gradient(90deg, #fff, #a9b5ff 55%, var(--cyan)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .lead { font-size: 18px; color: var(--text-2); max-width: 540px; margin: 0 0 26px; }
+    kbd { display: inline-flex; align-items: center; justify-content: center; min-width: 32px; height: 32px; padding: 0 9px; border-radius: 8px; background: linear-gradient(#1b2040, #121628); border: 1px solid var(--line-2); border-bottom-width: 3px; font: 600 14px var(--mono); color: var(--text); }
+    .keys { display: inline-flex; gap: 6px; align-items: center; vertical-align: middle; }
+    .downloads { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .btn { display: inline-flex; align-items: center; gap: 9px; height: 50px; padding: 0 22px; border-radius: 13px; font-weight: 650; font-size: 16px; text-decoration: none; border: 1px solid var(--line-2); color: var(--text); background: var(--surface); transition: transform .12s, filter .15s, border-color .15s; }
+    .btn:hover { transform: translateY(-1px); border-color: #3a4370; }
+    .btn.primary { background: linear-gradient(135deg, #20d4f2, #6a5bff); border: 0; color: #04050b; }
+    .btn.primary:hover { filter: brightness(1.08); }
+    .btn small { font-weight: 500; opacity: .75; font-size: 12.5px; }
+    .other { margin-top: 12px; font-size: 13.5px; color: var(--muted); }
+    .other a { color: var(--text-2); }
+
+    .demo { position: relative; height: 470px; border-radius: 18px; border: 1px solid var(--line-2); background: #04050a; overflow: hidden; box-shadow: 0 40px 120px rgba(0, 0, 0, .6), 0 0 0 1px rgba(60, 240, 255, .06); }
+    .demo-bar { position: absolute; top: 0; left: 0; right: 0; height: 36px; display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid var(--line); background: #080a12; z-index: 6; font: 600 11px var(--mono); letter-spacing: .1em; color: var(--cyan); }
+    .demo-bar i { width: 10px; height: 10px; border-radius: 50%; background: #2a3152; display: inline-block; }
+    .demo-scroll { position: absolute; inset: 36px 0 0; overflow: hidden; }
+    .demo-doc { padding: 22px 26px 400px; font: 14.5px/1.75 var(--serif); color: #c8cee6; }
+    .demo-doc h3 { font-weight: 500; font-size: 19px; color: #eef1fd; margin: 0 0 10px; border-bottom: 1px solid #1c2136; padding-bottom: 4px; }
+    .demo-doc p { margin: 0 0 10px; }
+    .demo-doc .n { color: #6f789c; margin-right: 4px; }
+    .demo-doc .l { color: #8b98ff; }
+
+    section { padding: 70px 0; border-top: 1px solid #10142a; }
+    h2 { font-size: clamp(28px, 3.6vw, 38px); margin: 8px 0 14px; letter-spacing: -.01em; }
+    .sub { color: var(--text-2); max-width: 680px; margin: 0 0 34px; }
+    .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .card { border: 1px solid var(--line); background: var(--surface); border-radius: 16px; padding: 18px; }
+    .card h3 { margin: 10px 0 6px; font-size: 16px; }
+    .card p { margin: 0; color: var(--muted); font-size: 14px; }
+    .dot { width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font: 700 15px var(--mono); }
+    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; counter-reset: s; }
+    .step { position: relative; padding: 22px 20px 20px; border-radius: 16px; border: 1px solid var(--line); background: linear-gradient(180deg, rgba(60, 240, 255, .04), transparent 60%), var(--surface); }
+    .step::before { counter-increment: s; content: counter(s); position: absolute; top: -14px; left: 18px; width: 28px; height: 28px; border-radius: 50%; background: var(--cyan); color: #03040a; font: 700 14px/28px var(--mono); text-align: center; }
+    .step h3 { margin: 6px 0 6px; font-size: 16px; }
+    .step p { margin: 0; color: var(--text-2); font-size: 14.5px; }
+    .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .os { border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; background: var(--surface); }
+    .os h3 { margin: 0 0 8px; font-size: 16px; }
+    .os ol { margin: 0; padding-left: 20px; color: var(--text-2); font-size: 14.5px; }
+    .os li { margin: 4px 0; }
+    code { font: 13px var(--mono); background: #151a30; border: 1px solid var(--line-2); border-radius: 6px; padding: 1px 6px; color: var(--text); }
+    footer { padding: 40px 0 60px; color: var(--muted); font-size: 14px; border-top: 1px solid #10142a; display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+    footer a { color: var(--text-2); }
+
+    @media (max-width: 920px) {
+      .hero { grid-template-columns: 1fr; padding-top: 16px; }
+      .demo { height: 380px; }
+      .grid { grid-template-columns: 1fr 1fr; }
+      .steps, .two { grid-template-columns: 1fr; }
+      nav .links { display: none; }
+    }
+    @media (max-width: 520px) {
+      .grid { grid-template-columns: 1fr; }
+      .btn { width: 100%; justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <nav>
+      <a class="brand" href="#"><img src="assets/icon.svg" alt="">Aracne</a>
+      <div class="links"><a href="#funciones">Funciones</a><a href="#como">Cómo se usa</a><a href="#instalar">Instalar</a><a href="#ia">IA gratis</a><a href="https://github.com/hebexort771/Aracne">GitHub</a></div>
+    </nav>
+
+    <header class="hero">
+      <div>
+        <div class="kicker">Gratis · Windows · Mac · Linux</div>
+        <h1><span>Arañas digitales</span><br>que leen contigo.</h1>
+        <p class="lead">Pulsa <span class="keys" id="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Espacio</kbd></span> sobre cualquier página web, PDF o documento y unas arañas recorrerán tu pantalla: verifican tus fuentes, encuentran fechas de exámenes, resumen, explican imágenes y te preparan para estudiar.</p>
+        <div class="downloads" id="downloads"></div>
+        <div class="other" id="other"></div>
+      </div>
+      <div class="demo" id="demo">
+        <div class="demo-bar"><i></i><i></i><i></i>&nbsp; ARACNE // RASTREANDO REFERENCIAS</div>
+        <div class="demo-scroll" id="demoScroll">
+          <div class="demo-doc" id="demoDoc"></div>
+        </div>
+      </div>
+    </header>
+  </div>
+
+  <section id="funciones">
+    <div class="wrap">
+      <div class="kicker">Ocho especies de arañas</div>
+      <h2>Cada araña tiene un trabajo</h2>
+      <p class="sub">Las cuatro primeras funcionan sin internet ni inteligencia artificial. Las demás usan una IA que puedes tener gratis en tu propia computadora.</p>
+      <div class="grid">
+        <div class="card"><div class="dot" style="background:rgba(60,240,255,.12);color:var(--cyan)">⟲</div><h3>Verifica fuentes</h3><p>Revisa cada DOI, ISBN, PubMed, arXiv y enlace. Detecta artículos retractados, DOI inventados y enlaces rotos, y arma tu bibliografía APA 7.</p></div>
+        <div class="card"><div class="dot" style="background:rgba(255,63,210,.12);color:var(--magenta)">◷</div><h3>Encuentra plazos</h3><p>Saca exámenes, entregas, pagos e inscripciones de sílabos, páginas y correos, y los manda a Google Calendar o a un .ics.</p></div>
+        <div class="card"><div class="dot" style="background:rgba(95,114,255,.14);color:var(--blue)">⌖</div><h3>Contexto al instante</h3><p>Pasa el cursor sobre “Figura 3”, “[12]” o una sigla y una araña te trae lo que menciona, sin perder tu lugar.</p></div>
+        <div class="card"><div class="dot" style="background:rgba(169,139,255,.14);color:var(--violet)">⋔</div><h3>Telaraña de memoria</h3><p>Recuerda lo que lees (solo en tu computadora) y te avisa cuando un tema se conecta con algo que ya leíste.</p></div>
+        <div class="card"><div class="dot" style="background:rgba(255,255,255,.08)">✦</div><h3>Resúmenes con pruebas</h3><p>Ideas clave, secciones, glosario y preguntas de repaso. Cada idea tiene un hilo al párrafo de donde sale.</p></div>
+        <div class="card"><div class="dot" style="background:rgba(60,240,255,.12);color:var(--cyan)">?</div><h3>Pregúntale al texto</h3><p>Haz preguntas sobre lo que estás leyendo y recibe respuestas que citan los párrafos exactos.</p></div>
+        <div class="card"><div class="dot" style="background:rgba(61,255,162,.12);color:var(--green)">◉</div><h3>Lupa araña</h3><p>Encierra un gráfico, una fórmula, una tabla o una foto y te la explica. Sin IA, igual copia el texto de cualquier imagen.</p></div>
+        <div class="card"><div class="dot" style="background:rgba(255,181,71,.12);color:var(--amber)">⚠</div><h3>Letra pequeña</h3><p>Marca las trampas de contratos, matrículas y suscripciones: renovación automática, multas, uso de tus datos…</p></div>
+      </div>
+      <p class="sub" style="margin-top:22px">Y además: tarjetas de estudio y quizzes tipo examen (exportables a Anki), nivel de dificultad del texto, tiempo de lectura y modo enfoque.</p>
+    </div>
+  </section>
+
+  <section id="como">
+    <div class="wrap">
+      <div class="kicker">Cómo se usa</div>
+      <h2>Un atajo, en cualquier aplicación</h2>
+      <div class="steps">
+        <div class="step"><h3>Abre lo que quieras leer</h3><p>Una página en tu navegador, un PDF, un Word, el aula virtual o un correo.</p></div>
+        <div class="step"><h3>Pulsa el atajo</h3><p><span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Espacio</kbd></span> (en Mac <span class="keys"><kbd>⌘</kbd><kbd>⇧</kbd><kbd>Espacio</kbd></span>). La pantalla se invierte y las arañas salen a cazar.</p></div>
+        <div class="step"><h3>Explora el panel</h3><p>Todo lo que encontraron aparece al costado. Arrastra un recuadro para usar la lupa. <kbd>Esc</kbd> para salir.</p></div>
+      </div>
+      <p class="sub" style="margin-top:22px">¿Prefieres leer dentro de la app? Abre el lector, pega un enlace o arrastra un PDF, Word, imagen o texto.</p>
+    </div>
+  </section>
+
+  <section id="instalar">
+    <div class="wrap">
+      <div class="kicker">Instalar</div>
+      <h2>La primera vez que la abras</h2>
+      <p class="sub">Aracne es gratuita y de código abierto, pero todavía no está firmada por Apple ni por Microsoft, así que tu sistema te pedirá confirmar una vez.</p>
+      <div class="two">
+        <div class="os"><h3>Mac</h3><ol>
+          <li>Abre el <code>.dmg</code> y arrastra Aracne a Aplicaciones.</li>
+          <li>Ábrela. Si dice que no puede comprobarla: <b>Ajustes del Sistema → Privacidad y seguridad → Abrir igualmente</b>.</li>
+          <li>Al usar el atajo, activa Aracne en <b>Grabación de pantalla</b> y reinicia la app.</li>
+        </ol></div>
+        <div class="os"><h3>Windows</h3><ol>
+          <li>Abre <code>Aracne-windows-x64.exe</code>.</li>
+          <li>Si aparece “Windows protegió tu PC”, pulsa <b>Más información → Ejecutar de todas formas</b>.</li>
+          <li>Sigue el instalador. Aracne queda en la bandeja del sistema, junto al reloj.</li>
+        </ol></div>
+        <div class="os"><h3>Linux</h3><ol>
+          <li>Descarga el <code>.AppImage</code>, dale permiso de ejecución (clic derecho → Propiedades) y ábrelo.</li>
+          <li>En Ubuntu o Debian también puedes instalar el <code>.deb</code>.</li>
+          <li>Funciona mejor en sesiones X11; en Wayland el sistema puede pedir permiso para capturar la pantalla.</li>
+        </ol></div>
+        <div class="os" id="ia"><h3>Activa la IA gratis</h3><ol>
+          <li><b>En tu computadora, sin internet:</b> instala <a href="https://ollama.com/download">Ollama</a> y escribe <code>ollama pull gemma3</code>. Aracne lo detecta solo.</li>
+          <li><b>Con tu cuenta de Google:</b> crea una clave gratis en <a href="https://aistudio.google.com/apikey">aistudio.google.com/apikey</a> y pégala en Ajustes.</li>
+          <li>También funciona con Claude, OpenAI y servicios compatibles.</li>
+        </ol></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="kicker">Privacidad</div>
+      <h2>Tu pantalla no sale de tu computadora</h2>
+      <p class="sub">La lectura de la pantalla (OCR), la búsqueda de fechas, siglas y referencias, y la memoria de lecturas funcionan sin internet. Para verificar fuentes, Aracne consulta catálogos abiertos (Crossref, PubMed, arXiv, Open Library, archive.org) solo con los identificadores que encuentra. Si usas una IA en la nube, se le envía solo el texto o la imagen que tú pides analizar.</p>
+    </div>
+  </section>
+
+  <div class="wrap">
+    <footer>
+      <span>© 2026 Heber Gomez · Licencia MIT</span>
+      <span><a href="https://github.com/hebexort771/Aracne">Código en GitHub</a> · <a href="https://github.com/hebexort771/Aracne/issues">Reportar un problema</a></span>
+    </footer>
+  </div>
+
+  <script type="module">
+    import { SpiderWorld, COLORS } from './assets/engine.js';
+
+    // ----- Descargas según el sistema
+    const base = 'https://github.com/hebexort771/Aracne/releases/latest/download/';
+    const files = {
+      macArm: ['Aracne-mac-arm64.dmg', 'Mac con chip M'],
+      macIntel: ['Aracne-mac-x64.dmg', 'Mac con Intel'],
+      win: ['Aracne-windows-x64.exe', 'Windows'],
+      linux: ['Aracne-linux-x64.AppImage', 'Linux (AppImage)'],
+      deb: ['Aracne-linux-x64.deb', 'Ubuntu / Debian (.deb)'],
+    };
+    const ua = navigator.userAgent;
+    const isMac = /Mac OS X|Macintosh/.test(ua);
+    const isWin = /Windows/.test(ua);
+    const isLinux = /Linux/.test(ua) && !/Android/.test(ua);
+    const dl = document.getElementById('downloads');
+    const other = document.getElementById('other');
+    const btn = (key, primary) => `<a class="btn ${primary ? 'primary' : ''}" href="${base}${files[key][0]}">⬇ Descargar <small>· ${files[key][1]}</small></a>`;
+    let shown = [];
+    if (isMac) shown = ['macArm', 'macIntel'];
+    else if (isWin) shown = ['win'];
+    else if (isLinux) shown = ['linux', 'deb'];
+    else shown = ['win', 'macArm'];
+    dl.innerHTML = shown.map((k, i) => btn(k, i === 0)).join('');
+    other.innerHTML = 'Otros sistemas: ' + Object.keys(files).filter((k) => !shown.includes(k)).map((k) => `<a href="${base}${files[k][0]}">${files[k][1]}</a>`).join(' · ') + ' · <a href="https://github.com/hebexort771/Aracne/releases">todas las versiones</a>';
+    if (isMac) document.getElementById('keys').innerHTML = '<kbd>⌘</kbd><kbd>⇧</kbd><kbd>Espacio</kbd>';
+
+    // ----- Demostración: arañas rastreando una bibliografía
+    const refs = [
+      ['Selden, P. A., Shih, C. y Ren, D. (2011). A golden orb-weaver spider from the Middle Jurassic of China. <i>Biology Letters</i>, 7(5), 775–778. doi:', '10.1098/rsbl.2011.0228', 'c'],
+      ['Foelix, R. F. (2011). <i>Biology of Spiders</i>. Oxford University Press. ISBN ', '978-0-19-973482-5', 'c'],
+      ['Entrega del informe final: ', '20 de noviembre de 2026', 'm'],
+      ['Wakefield, A. J. et al. (1998). <i>The Lancet</i>, 351(9103), 637–641. doi:', '10.1016/S0140-6736(97)11096-0', 'r'],
+      ['Garb, J. E. y Hayashi, C. Y. (2005). Modular evolution of egg case silk genes. <i>PNAS</i>, 102(32). PMID: ', '16046543', 'c'],
+      ['Examen parcial de Redes: ', '27 de noviembre de 2026 a las 10:00', 'm'],
+      ['La ', 'Organización Mundial de la Salud (OMS)', 'b', ' publicó nuevas recomendaciones sobre el uso de inteligencia artificial en educación.'],
+      ['Vaswani, A. et al. (2017). Attention Is All You Need. ', 'arXiv:1706.03762', 'a'],
+      ['Guía de la biblioteca (enlace antiguo): ', 'biblioteca.ejemplo.pe/guias/redes.pdf', 'r'],
+      ['Penney, D. y Selden, P. A. (2007). Spinning with the dinosaurs. <i>Geology Today</i>, 23(6), 231–237. doi:', '10.1111/j.1365-2451.2007.00641.x', 'c'],
+      ['Pago de la segunda cuota: ', '5 de diciembre de 2026', 'm'],
+      ['Mammola, S. et al. (2022). The global spread of misinformation on spiders. <i>Current Biology</i>, 32(16). doi:', '10.1016/j.cub.2022.07.026', 'c'],
+    ];
+    const doc = document.getElementById('demoDoc');
+    doc.innerHTML = '<h3>General and cited references</h3>' + refs.concat(refs).map((r, i) => `<p><span class="n">${140 + i}.</span>${r[0]}<span class="t" data-k="${r[2]}">${r[1]}</span>${r[3] || ''}</p>`).join('');
+    const scroll = document.getElementById('demoScroll');
+    const demo = document.getElementById('demo');
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const world = new SpiderWorld({ host: demo, getCamera: () => ({ x: 0, y: scroll.scrollTop - 36 }), setCameraY: (y) => { scroll.scrollTop = y; }, intensity: reduce ? 'apagada' : 'alta' });
+    const color = { c: COLORS.cyan, m: COLORS.magenta, b: COLORS.blue, a: COLORS.amber, r: COLORS.red };
+    function run() {
+      world.reset();
+      scroll.scrollTop = 0;
+      const hostRect = () => scroll.getBoundingClientRect();
+      const targets = [...doc.querySelectorAll('.t')].map((el, i) => ({
+        id: `t${i}-${Date.now()}`,
+        color: color[el.dataset.k],
+        text: el.textContent,
+        label: el.dataset.k === 'r' ? (el.textContent.startsWith('10.') ? 'RETRACTADO' : 'ENLACE ROTO') : el.textContent,
+        rects: () => { const h = hostRect(); return [...el.getClientRects()].map((r) => ({ x: r.left - h.left, y: r.top - h.top + scroll.scrollTop, w: r.width, h: r.height })); },
+      }));
+      world.deploy(targets, { autoScroll: true, maxDuration: 16 });
+    }
+    run();
+    setInterval(run, 19000);
+  </script>
+</body>
+</html>

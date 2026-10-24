@@ -1,0 +1,125 @@
+{
+  "name": "aracne",
+  "productName": "Aracne",
+  "version": "1.0.0",
+  "description": "Arañas digitales que leen contigo: verifican fuentes, resumen, analizan imágenes y te ayudan a estudiar.",
+  "author": {
+    "name": "Heber Gomez",
+    "email": "hebexort771@users.noreply.github.com"
+  },
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "node scripts/copy-assets.js && node scripts/dev.js",
+    "build": "node scripts/copy-assets.js && vite build",
+    "start": "npm run build && electron .",
+    "dist": "npm run build && electron-builder",
+    "test": "node --test tests/*.test.js"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@mozilla/readability": "0.6.0",
+    "@tesseract.js-data/eng": "1.0.0",
+    "@tesseract.js-data/spa": "1.0.0",
+    "chrono-node": "2.10.1",
+    "dompurify": "3.4.16",
+    "electron": "44.5.1",
+    "electron-builder": "26.17.0",
+    "katex": "0.18.11",
+    "mammoth": "1.12.3",
+    "pdfjs-dist": "6.4.299",
+    "tesseract.js": "7.0.0",
+    "vite": "8.3.1"
+  },
+  "homepage": "https://hebexort771.github.io/Aracne/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hebexort771/Aracne.git"
+  },
+  "build": {
+    "appId": "com.hebergomez.aracne",
+    "productName": "Aracne",
+    "copyright": "© 2026 Heber Gomez",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**",
+      "dist/**",
+      "package.json",
+      "!**/*.map"
+    ],
+    "asar": true,
+    "afterPack": "scripts/after-pack.cjs",
+    "mac": {
+      "category": "public.app-category.education",
+      "icon": "build/icon.icns",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "Aracne-mac-${arch}.${ext}",
+      "identity": null,
+      "hardenedRuntime": false,
+      "extendInfo": {
+        "NSHumanReadableCopyright": "© 2026 Heber Gomez"
+      }
+    },
+    "dmg": {
+      "title": "Aracne",
+      "artifactName": "Aracne-mac-${arch}.${ext}"
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "Aracne-windows-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Aracne",
+      "language": "3082"
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "category": "Education",
+      "synopsis": "Arañas digitales que leen contigo",
+      "description": "Verifica fuentes, encuentra plazos, resume, analiza imágenes y te ayuda a estudiar.",
+      "maintainer": "Heber Gomez <hebexort771@users.noreply.github.com>",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "Aracne-linux-${arch}.${ext}"
+    },
+    "publish": null
+  }
+}

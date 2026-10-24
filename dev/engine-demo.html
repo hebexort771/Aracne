@@ -1,0 +1,29 @@
+<!doctype html><meta charset="utf-8">
+<style>
+ html,body{margin:0;background:#05060b;color:#c9cfe6;font:15px/1.6 Georgia,serif}
+ #wrap{position:relative;width:900px;height:640px;overflow:hidden}
+ #scroll{position:absolute;inset:0;overflow:auto;padding:30px 50px}
+ h2{font-weight:400;color:#e8ecff;border-bottom:1px solid #2a2f45}
+ .ref{color:#7f8dff}
+</style>
+<div id="wrap"><div id="scroll"><div id="content"></div></div></div>
+<script type="module">
+import { SpiderWorld, COLORS } from '../src/spiders/engine.js';
+const content = document.getElementById('content');
+let html = '<h2>General and cited references</h2>';
+for (let i = 140; i < 175; i++) html += `<p>${i}. ^ Selden, P.A. (2011). "A golden orb-weaver spider from the Middle Jurassic of China". <i>Biology Letters</i>. 7 (5): 775–78. doi:<span class="t">10.1098/rsbl.2011.${i}</span>. ISBN <span class="t">978-0-8032-8280-${i%10}</span>. Retrieved <span class="t">15 October 2008</span>.</p>`;
+content.innerHTML = html;
+const scroll = document.getElementById('scroll');
+const world = new SpiderWorld({ host: document.getElementById('wrap'), getCamera: () => ({ x: scroll.scrollLeft, y: scroll.scrollTop }), setCameraY: (y) => { scroll.scrollTop = y; } });
+const wrapRect = () => document.getElementById('wrap').getBoundingClientRect();
+const targets = [...document.querySelectorAll('.t')].map((el, i) => ({
+  id: 't' + i,
+  color: [COLORS.cyan, COLORS.magenta, COLORS.blue][i % 3],
+  text: el.textContent,
+  label: el.textContent,
+  rects: () => { const w = wrapRect(); return [...el.getClientRects()].map(r => ({ x: r.left - w.left + scroll.scrollLeft, y: r.top - w.top + scroll.scrollTop, w: r.width, h: r.height })); },
+  carryTo: () => ({ x: 890, y: 300 }),
+}));
+setTimeout(() => world.deploy(targets, { autoScroll: true }), 200);
+window.world = world;
+</script>
