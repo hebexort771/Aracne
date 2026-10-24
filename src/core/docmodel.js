@@ -47,6 +47,7 @@ export class DomDoc {
     this.blocks = [];
     this.layoutVersion = 0;
     this.rectCache = new Map();
+    this.tokenCache = new Map();
     if (pdfBlocks) this.buildFromGroups(pdfBlocks);
     else this.buildFromDom();
     this.lang = detectLang(this.text);
@@ -55,6 +56,9 @@ export class DomDoc {
       this.rectCache.clear();
     });
     this.ro.observe(root);
+    // Si cambia el ancho del visor (p. ej. al abrir el panel), el texto se mueve aunque no cambie de tamaño.
+    if (scroller && scroller !== root) this.ro.observe(scroller);
+    if (host && host !== scroller) this.ro.observe(host);
   }
 
   buildFromDom() {
@@ -224,6 +228,80 @@ export class DomDoc {
     });
   }
 
+  // ---------- Lectura continua (las arañas recorren renglón por renglón) ----------
+
+  /** Renglones visibles en coordenadas del mundo. */
+  readingLines(view) {
+    const top = view.y - 4, bottom = view.y + view.h + 4;
+    const out = [];
+    for (const b of this.blocks) {
+      const br = this.blockRects(b.id)[0];
+      if (!br || br.y + br.h < top || br.y > bottom) continue;
+      const rects = this.rectsFor(b.start, b.end);
+      rects.forEach((r, i) => {
+        if (r.w < 8 || r.h < 6 || r.h > 90 || r.y + r.h < top || r.y > bottom) return;
+        out.push({ key: `${b.id}:${i}`, block: b.id, idx: i, heading: b.type === 'heading', x: r.x, y: r.y, w: r.w, h: r.h, start: b.start, end: b.end, words: () => this.lineWords(b, r) });
+      });
+    }
+    return out;
+  }
+
+  blockTokens(b) {
+    let t = this.tokenCache.get(b.id);
+    if (!t) {
+      t = [];
+      const s = this.text.slice(b.start, b.end);
+      for (const m of s.matchAll(/\S+/g)) {
+        t.push({ s: b.start + m.index, e: b.start + m.index + m[0].length, text: m[0], r: null, v: -1 });
+        if (t.length > 1500) break;
+      }
+      this.tokenCache.set(b.id, t);
+    }
+    return t;
+  }
+
+  /** Palabras de un renglón (búsqueda binaria: solo mide las palabras de ese renglón). */
+  lineWords(b, line) {
+    const tokens = this.blockTokens(b);
+    if (!tokens.length) return [];
+    const o = this.hostOrigin();
+    const rectOf = (i) => {
+      const tk = tokens[i];
+      if (tk.v !== this.layoutVersion) {
+        tk.v = this.layoutVersion;
+        tk.r = null;
+        const range = this.range(tk.s, tk.e);
+        const c = range ? [...range.getClientRects()].find((x) => x.width > 0.5) : null;
+        if (c) tk.r = { x: c.left - o.x, y: c.top - o.y, w: c.width, h: c.height };
+      }
+      return tk.r;
+    };
+    let lo = 0, hi = tokens.length - 1, first = tokens.length;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      const r = rectOf(mid);
+      if (!r || r.y + r.h / 2 < line.y) lo = mid + 1;
+      else {
+        first = mid;
+        hi = mid - 1;
+      }
+    }
+    const out = [];
+    for (let i = first; i < tokens.length && out.length < 80; i++) {
+      const r = rectOf(i);
+      if (!r) continue;
+      const cy = r.y + r.h / 2;
+      if (cy > line.y + line.h + 1) break;
+      if (cy >= line.y - 1 && r.x >= line.x - 2 && r.x <= line.x + line.w + 2) out.push({ ...r, text: tokens[i].text });
+    }
+    return out.sort((a, c) => a.x - c.x);
+  }
+
+  wordCount() {
+    if (this._words === undefined) this._words = (this.text.match(/\S+/g) || []).length;
+    return this._words;
+  }
+
   destroy() {
     this.ro.disconnect();
   }
@@ -270,18 +348,20 @@ export class OcrDoc {
     for (const lines of paragraphs) {
       const pStart = text.length;
       const bbox = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
-      for (const { line, words } of lines) {
+      lines.forEach(({ line, words }, li) => {
         if (text.length > pStart) text += '\n';
         const lineIdx = this.lines.length;
-        this.lines.push({ bbox: line.bbox });
+        this.lines.push({ bbox: line.bbox, block: this.blocks.length + 1, idx: li, words: [] });
         bbox.x0 = Math.min(bbox.x0, line.bbox.x0); bbox.y0 = Math.min(bbox.y0, line.bbox.y0);
         bbox.x1 = Math.max(bbox.x1, line.bbox.x1); bbox.y1 = Math.max(bbox.y1, line.bbox.y1);
         words.forEach((w, i) => {
           if (i > 0) text += ' ';
-          this.words.push({ start: text.length, end: text.length + w.text.length, bbox: w.bbox, line: lineIdx, text: w.text });
+          const word = { start: text.length, end: text.length + w.text.length, bbox: w.bbox, line: lineIdx, text: w.text };
+          this.words.push(word);
+          this.lines[lineIdx].words.push(word);
           text += w.text;
         });
-      }
+      });
       const pText = text.slice(pStart).replace(/\s+/g, ' ').trim();
       if (pText.length >= 2) {
         const heading = pText.length < 90 && !/[.,;:]$/.test(pText) && lines.length === 1;
@@ -339,6 +419,29 @@ export class OcrDoc {
 
   visibleBlocks() {
     return this.blocks;
+  }
+
+  readingLines(view) {
+    const out = [];
+    this.lines.forEach((l, i) => {
+      if (!l.words.length) return;
+      const r = this.toCss(l.bbox);
+      if (r.w < 8 || r.h < 5 || r.y + r.h < view.y || r.y > view.y + view.h) return;
+      out.push({
+        key: `L${i}`,
+        block: l.block,
+        idx: l.idx,
+        ...r,
+        start: l.words[0].start,
+        end: l.words[l.words.length - 1].end,
+        words: () => l.words.map((w) => ({ ...this.toCss(w.bbox), text: w.text })).sort((a, b) => a.x - b.x),
+      });
+    });
+    return out;
+  }
+
+  wordCount() {
+    return this.words.length;
   }
 
   destroy() {}

@@ -129,3 +129,13 @@
 .feature .icon { color: var(--cyan); }
 .feature p { margin: 0; }
 .permission p { color: var(--text-2); }
+
+/* Marcador en vivo de las arañas */
+.spider-hud { position: absolute; left: 14px; bottom: 14px; z-index: 12; display: flex; align-items: center; gap: 9px; height: 30px; padding: 0 4px 0 11px; border-radius: 10px; background: rgba(8, 10, 18, .86); border: 1px solid rgba(60, 240, 255, .22); box-shadow: 0 8px 30px rgba(0, 0, 0, .45); font: 600 10.5px var(--mono); letter-spacing: .07em; color: var(--text-2); backdrop-filter: blur(8px); transition: opacity .3s, transform .3s; }
+.is-home .spider-hud { opacity: 0; transform: translateY(12px); pointer-events: none; }
+.sh-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 10px var(--green); animation: pulse 1.2s infinite; }
+.spider-hud.paused .sh-dot { background: var(--amber); box-shadow: 0 0 8px var(--amber); animation: none; }
+.sh-text { white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.sh-btn { height: 22px; display: inline-flex; align-items: center; gap: 5px; padding: 0 8px; border-radius: 7px; border: 1px solid var(--line-2); background: transparent; color: var(--text-2); font: 600 10.5px var(--mono); letter-spacing: .04em; cursor: pointer; }
+.sh-btn:hover { color: #fff; border-color: var(--cyan); }
+.spider-hud.paused .sh-btn { color: var(--cyan); border-color: rgba(60, 240, 255, .5); }

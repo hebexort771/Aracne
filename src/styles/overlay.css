@@ -37,3 +37,6 @@ html, body { background: transparent; }
 .ov.on .ov-panel { transform: none; }
 .ov.closing .ov-panel { transform: translateX(calc(100% + 30px)); transition-delay: 0s; transition-duration: .3s; }
 .ov-panel .panel { border-left: 0; background: linear-gradient(180deg, rgba(12, 15, 26, .94), rgba(7, 8, 15, .95)); }
+.hud-counter { color: var(--amber); white-space: nowrap; }
+.hud-counter:empty { display: none; }
+.hud-btn.off { color: var(--amber); border-color: rgba(255, 181, 71, .4); }

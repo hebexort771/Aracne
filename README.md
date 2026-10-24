@@ -7,7 +7,7 @@
 <p align="center">
   <b>Arañas digitales que leen contigo.</b><br>
   Pulsa <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Espacio</kbd> (en Mac <kbd>⌘</kbd> + <kbd>⇧</kbd> + <kbd>Espacio</kbd>) sobre cualquier página, PDF o documento<br>
-  y unas arañas recorrerán tu pantalla para verificar fuentes, encontrar plazos, resumir, explicar imágenes y ayudarte a estudiar.
+  y unas arañas bajarán colgadas de su hilo a leer tu pantalla renglón por renglón: verifican fuentes, encuentran plazos, cifras y nombres, resumen, explican imágenes y te ayudan a estudiar.
 </p>
 
 <p align="center">
@@ -42,6 +42,7 @@ Cada araña tiene un trabajo:
 | **Fuentes** | Revisa DOI, ISBN, PubMed, PMC, arXiv y enlaces. Detecta artículos **retractados**, DOI inventados y enlaces rotos (con copia en archive.org). Copia tu bibliografía en **APA 7**. | No |
 | **Plazos** | Encuentra exámenes, entregas, pagos e inscripciones y los manda a Google Calendar o a un archivo `.ics`. | No |
 | **Contexto** | Al pasar el cursor sobre "Figura 3", "[12]", una nota o una sigla, una araña te trae lo que menciona. | No |
+| **Datos** | Encuentra cifras (montos, porcentajes, medidas), personas, lugares e instituciones, definiciones, citas textuales, correos y teléfonos en cualquier texto. | No |
 | **Memoria** | Recuerda lo que lees (solo en tu computadora) y te muestra conexiones con lecturas anteriores. | No |
 | **Lectura** | Tiempo de lectura, nivel de dificultad (INFLESZ / Flesch), oraciones más difíciles y modo enfoque. | No |
 | **Resumen** | Ideas clave, secciones, glosario y preguntas de repaso; cada idea tiene un hilo al párrafo de donde sale. Sin IA hace un resumen extractivo. | Sí (opcional) |
@@ -49,6 +50,14 @@ Cada araña tiene un trabajo:
 | **Estudiar** | Tarjetas de memoria y quiz tipo examen, exportables a Anki. | Sí |
 | **Visión** | La **lupa araña**: encierra un gráfico, una fórmula (la escribe en LaTeX), una tabla o una foto y te la explica. Sin IA, copia el texto de la zona con OCR. | Sí (opcional) |
 | **Letra pequeña** | Marca las trampas de contratos, matrículas y suscripciones. | Sí |
+
+### Arañas que no se quedan quietas
+
+Después del primer rastreo, las arañas **siguen leyendo** lo que tienes en pantalla, renglón por renglón: cada palabra que pasan se enciende y se decodifica, los títulos se reescriben en monoespaciado, dejan hilos de seda y huellas, y lo que encuentran vuela como un paquete de datos hacia el panel. Si bajas en la página, vuelven a entrar colgadas de su hilo.
+
+- El marcador de abajo a la izquierda muestra cuántas arañas hay, cuánto llevan leído y cuántos hallazgos.
+- **Pausar** hace que se vayan trepando (las marcas se quedan); **Soltar arañas** las trae de vuelta.
+- En *Ajustes → Animación* eliges la intensidad (Alta, Media, Baja o sin arañas) y puedes apagar la lectura continua.
 
 ### Dos formas de usarla
 
@@ -91,8 +100,8 @@ electron/            proceso principal
   settings.js        ajustes; claves cifradas con safeStorage
   web.js             carga páginas web completas (incluye las que usan JavaScript)
 src/
-  spiders/engine.js  motor de arañas: patas con cinemática inversa, hilos, recuadros neón, etiquetas
-  core/              extractores sin IA (fuentes, fechas, siglas, referencias), APA 7, .ics, OCR, lectura
+  spiders/engine.js  motor de arañas: patas con cinemática inversa, lectura por renglones, seda, recuadros neón, etiquetas
+  core/              extractores sin IA (fuentes, fechas, siglas, referencias, cifras, nombres, definiciones), APA 7, .ics, OCR
   ai/tasks.js        resumen con párrafos citados, preguntas, estudio, visión, letra pequeña
   panel/panel.js     panel lateral (compartido por el lector y la capa de pantalla)
   lector/            lector de web, PDF (pdf.js), Word (mammoth), texto e imágenes
@@ -104,7 +113,7 @@ docs/                página web (GitHub Pages)
 ### Publicar una versión
 
 1. Sube los cambios a `main`.
-2. En GitHub → **Releases → Draft a new release** → etiqueta `v1.0.1` (o la que siga) → **Publish release**.
+2. En GitHub → **Releases → Draft a new release** → etiqueta `v1.1.1` (o la que siga) → **Publish release**.
 3. GitHub Actions compila Mac, Windows y Linux (unos 15 minutos) y adjunta los instaladores.
 
 ## Licencia

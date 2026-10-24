@@ -6,6 +6,7 @@ import path from 'node:path';
 const DEFAULTS = {
   shortcut: 'CommandOrControl+Shift+Space',
   animation: 'alta', // alta | media | baja | apagada
+  patrol: true, // las arañas siguen leyendo el texto visible después del escaneo
   invertScreen: 'auto', // auto | siempre | nunca
   rememberReading: true,
   openAtLogin: false,

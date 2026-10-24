@@ -3,6 +3,7 @@ import { extractSources, extractAcronyms, extractInternalRefs, blockMatchesRef, 
 import { extractDates } from './dates.js';
 import { readability, hardestSentences } from './lang.js';
 import { keyTerms } from './textrank.js';
+import { extractGeneral } from './general.js';
 
 const REF_HEADING = /referenc|bibliograf|fuentes|notas|citas|citations|works cited|further reading|lecturas|enlaces externos|external links|sources|notes/i;
 
@@ -152,5 +153,25 @@ export function analyzeDocument(doc, now = new Date()) {
   });
   const keywords = keyTerms(mainText || text, 40);
 
-  return { sources, dates, acronyms, refs, stats, hard, keywords, refBlocks };
+  // ---- Datos de cualquier texto: cifras, nombres, citas, definiciones, contactos ----
+  const taken = [
+    ...sources.flatMap((s) => s.occurrences.map((o) => [o.start, o.end])),
+    ...dates.map((d) => [d.start, d.end]),
+    ...acronyms.map((a) => [a.start, a.end]),
+    ...refs.map((r) => [r.start, r.end]),
+  ];
+  const skip = (pos) => {
+    const b = doc.blockAt(pos);
+    return !b || b.type === 'heading' || refBlocks.has(b.id);
+  };
+  let general;
+  try {
+    general = extractGeneral(text, { taken, skip, lang: doc.lang });
+  } catch (err) {
+    console.warn('extractGeneral', err);
+    general = { numbers: [], emails: [], phones: [], quotes: [], names: [], definitions: [] };
+  }
+  const headings = doc.blocks.filter((b) => b.type === 'heading' && b.text.length <= 120).map((b) => ({ block: b.id, text: b.text, start: b.start, end: b.end }));
+
+  return { sources, dates, acronyms, refs, stats, hard, keywords, refBlocks, general, headings };
 }

@@ -114,13 +114,14 @@
 
   <section id="funciones">
     <div class="wrap">
-      <div class="kicker">Ocho especies de arañas</div>
+      <div class="kicker">Nueve especies de arañas</div>
       <h2>Cada araña tiene un trabajo</h2>
-      <p class="sub">Las cuatro primeras funcionan sin internet ni inteligencia artificial. Las demás usan una IA que puedes tener gratis en tu propia computadora.</p>
+      <p class="sub">Las cinco primeras funcionan sin internet ni inteligencia artificial. Las demás usan una IA que puedes tener gratis en tu propia computadora. Y ninguna se queda quieta: después del primer rastreo siguen leyendo, renglón por renglón, todo lo que tienes en pantalla.</p>
       <div class="grid">
         <div class="card"><div class="dot" style="background:rgba(60,240,255,.12);color:var(--cyan)">⟲</div><h3>Verifica fuentes</h3><p>Revisa cada DOI, ISBN, PubMed, arXiv y enlace. Detecta artículos retractados, DOI inventados y enlaces rotos, y arma tu bibliografía APA 7.</p></div>
         <div class="card"><div class="dot" style="background:rgba(255,63,210,.12);color:var(--magenta)">◷</div><h3>Encuentra plazos</h3><p>Saca exámenes, entregas, pagos e inscripciones de sílabos, páginas y correos, y los manda a Google Calendar o a un .ics.</p></div>
         <div class="card"><div class="dot" style="background:rgba(95,114,255,.14);color:var(--blue)">⌖</div><h3>Contexto al instante</h3><p>Pasa el cursor sobre “Figura 3”, “[12]” o una sigla y una araña te trae lo que menciona, sin perder tu lugar.</p></div>
+        <div class="card"><div class="dot" style="background:rgba(255,181,71,.12);color:var(--amber)">#</div><h3>Datos de cualquier texto</h3><p>Cifras, montos, porcentajes y medidas; personas, lugares e instituciones; definiciones, citas textuales, correos y teléfonos. Todo junto en el panel.</p></div>
         <div class="card"><div class="dot" style="background:rgba(169,139,255,.14);color:var(--violet)">⋔</div><h3>Telaraña de memoria</h3><p>Recuerda lo que lees (solo en tu computadora) y te avisa cuando un tema se conecta con algo que ya leíste.</p></div>
         <div class="card"><div class="dot" style="background:rgba(255,255,255,.08)">✦</div><h3>Resúmenes con pruebas</h3><p>Ideas clave, secciones, glosario y preguntas de repaso. Cada idea tiene un hilo al párrafo de donde sale.</p></div>
         <div class="card"><div class="dot" style="background:rgba(60,240,255,.12);color:var(--cyan)">?</div><h3>Pregúntale al texto</h3><p>Haz preguntas sobre lo que estás leyendo y recibe respuestas que citan los párrafos exactos.</p></div>
@@ -137,7 +138,7 @@
       <h2>Un atajo, en cualquier aplicación</h2>
       <div class="steps">
         <div class="step"><h3>Abre lo que quieras leer</h3><p>Una página en tu navegador, un PDF, un Word, el aula virtual o un correo.</p></div>
-        <div class="step"><h3>Pulsa el atajo</h3><p><span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Espacio</kbd></span> (en Mac <span class="keys"><kbd>⌘</kbd><kbd>⇧</kbd><kbd>Espacio</kbd></span>). La pantalla se invierte y las arañas salen a cazar.</p></div>
+        <div class="step"><h3>Pulsa el atajo</h3><p><span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Espacio</kbd></span> (en Mac <span class="keys"><kbd>⌘</kbd><kbd>⇧</kbd><kbd>Espacio</kbd></span>). La pantalla se invierte, las arañas bajan colgadas de su hilo y empiezan a leer cada renglón.</p></div>
         <div class="step"><h3>Explora el panel</h3><p>Todo lo que encontraron aparece al costado. Arrastra un recuadro para usar la lupa. <kbd>Esc</kbd> para salir.</p></div>
       </div>
       <p class="sub" style="margin-top:22px">¿Prefieres leer dentro de la app? Abre el lector, pega un enlace o arrastra un PDF, Word, imagen o texto.</p>
@@ -191,6 +192,7 @@
 
   <script type="module">
     import { SpiderWorld, COLORS } from './assets/engine.js';
+    import { DomDoc } from './assets/docmodel.js';
 
     // ----- Descargas según el sistema
     const base = 'https://github.com/hebexort771/Aracne/releases/latest/download/';
@@ -238,9 +240,13 @@
     const demo = document.getElementById('demo');
     const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
     const world = new SpiderWorld({ host: demo, getCamera: () => ({ x: 0, y: scroll.scrollTop - 36 }), setCameraY: (y) => { scroll.scrollTop = y; }, intensity: reduce ? 'apagada' : 'alta' });
+    world.maxSpiders = reduce ? 0 : 6;
+    // Después del rastreo, las arañas siguen leyendo renglón por renglón.
+    const reading = new DomDoc({ root: doc, scroller: scroll, host: scroll, kind: 'web', title: 'demo' });
     const color = { c: COLORS.cyan, m: COLORS.magenta, b: COLORS.blue, a: COLORS.amber, r: COLORS.red };
     function run() {
       world.reset();
+      world.setReader(reading);
       scroll.scrollTop = 0;
       const hostRect = () => scroll.getBoundingClientRect();
       const targets = [...doc.querySelectorAll('.t')].map((el, i) => ({

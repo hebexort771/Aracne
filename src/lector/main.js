@@ -25,7 +25,10 @@ const scroller = h('div', { class: 'scroller' });
 const lensLayer = h('div', { class: 'lens-layer' });
 const hoverCard = h('div', { class: 'hover-card' });
 const loading = h('div', { class: 'loading' });
-const viewerHost = h('div', { class: 'viewer-host' }, scroller, lensLayer, hoverCard, loading);
+const hudText = h('span', { class: 'sh-text' }, '');
+const hudBtn = h('button', { class: 'sh-btn', title: 'Pausar o soltar las arañas', onclick: () => toggleSpiders() }, icon('spider', 14), h('span', {}, 'Pausar'));
+const spiderHud = h('div', { class: 'spider-hud' }, h('span', { class: 'sh-dot' }), hudText, hudBtn);
+const viewerHost = h('div', { class: 'viewer-host' }, scroller, lensLayer, hoverCard, spiderHud, loading);
 const panelMount = h('div', { class: 'panel-mount' });
 
 const actions = {
@@ -56,7 +59,41 @@ const world = new SpiderWorld({
   decor: 'web',
 });
 world.canvas.style.zIndex = '4';
+world.setPatrol(settings.patrol !== false);
 for (const ev of ['wheel', 'keydown', 'mousedown', 'touchstart']) scroller.addEventListener(ev, () => world.cancelAutoScroll(), { passive: true });
+
+// Cada hallazgo que llega al panel hace parpadear su botón.
+world.on('arrive', (t) => {
+  const view = railViewFor(t?.species);
+  const btn = panelMount.querySelector(`.rail-btn[data-view="${view}"]`);
+  if (!btn) return;
+  btn.classList.remove('ping');
+  void btn.offsetWidth;
+  btn.classList.add('ping');
+});
+
+function railViewFor(species) {
+  return species === 'dates' ? 'dates' : species === 'sources' ? 'sources' : species === 'context' ? 'context' : 'overview';
+}
+
+// Marcador en vivo: cuántas arañas, cuánto han leído y cuánto encontraron.
+setInterval(() => {
+  const st = world.stats;
+  spiderHud.classList.toggle('paused', !st.active);
+  hudBtn.lastChild.textContent = st.active ? 'Pausar' : 'Soltar arañas';
+  if (!current) return;
+  if (!st.active) {
+    hudText.textContent = `ARAÑAS EN PAUSA · ${st.found} HALLAZGOS`;
+    return;
+  }
+  const pct = Math.round(st.progress * 100);
+  hudText.textContent = `${st.spiders} ARAÑAS · ${st.reading ? `${st.reading} LEYENDO · ` : ''}LEÍDO ${pct}% · ${st.found} HALLAZGOS`;
+}, 300);
+
+function toggleSpiders() {
+  world.setActive(!world.active);
+  toast(world.active ? 'Las arañas vuelven a leer' : 'Arañas en pausa: se quedan las marcas', 'info', 1800);
+}
 
 const panel = new Panel({
   mount: panelMount,
@@ -79,6 +116,7 @@ let fontScale = 1;
 api.on('settings:changed', (s) => {
   settings = s;
   world.setIntensity(s.animation);
+  world.setPatrol(s.patrol !== false);
 });
 
 /** @type {{doc:any, findings:any, viewer:any, meta:any}|null} */
@@ -137,6 +175,7 @@ async function goHome() {
 function closeCurrent() {
   hideHoverCard();
   world.reset();
+  world.setReader(null);
   if (current?.viewer?.destroy) current.viewer.destroy();
   if (current?.doc?.destroy) current.doc.destroy();
   current = null;
@@ -288,6 +327,7 @@ async function afterOpen(doc, viewer, source) {
   panel.setDocument(doc, findings, world);
   panel.show('overview');
   setupHover(doc, findings);
+  world.setReader(doc);
   scan();
   // Recordar (solo en esta computadora) para la telaraña de memoria.
   if (findings.keywords.length >= 3) {
@@ -336,9 +376,10 @@ function scan() {
   const { doc, findings } = current;
   world.reset();
   const { chosen, rest } = buildTargets(doc, findings, { max: 70 });
-  for (const t of chosen) t.carryTo = railPoint(t.species === 'dates' ? 'dates' : t.species === 'sources' ? 'sources' : 'context');
+  for (const t of [...chosen, ...rest]) t.carryTo = railPoint(railViewFor(t.species));
   world.deploy(chosen, { autoScroll: settings.animation !== 'apagada' && settings.animation !== 'baja' });
-  rest.forEach((t, i) => world.markOnly(t, 1.5 + i * 0.012));
+  // El resto aparece cuando una araña lee el renglón donde está.
+  world.addLatent(rest);
   clearInterval(scanWatch);
   const startedAt = Date.now();
   let wasBusy = true;

@@ -22,11 +22,13 @@ const status = h('span', { class: 'hud-status' }, 'listo');
 const progressBar = h('span', { class: 'hud-progress' }, h('i'));
 const invertBtn = h('button', { class: 'hud-btn', title: 'Invertir colores', onclick: () => setInverted(!inverted) }, icon('contrast', 16));
 const lectorBtn = h('button', { class: 'hud-btn', title: 'Abrir este texto en el lector', onclick: () => openInLector() }, icon('reading', 16));
+const spiderBtn = h('button', { class: 'hud-btn', title: 'Pausar o soltar las arañas', onclick: () => toggleSpiders() }, icon('spider', 16));
+const counter = h('span', { class: 'hud-counter' });
 const exitBtn = h('button', { class: 'hud-btn exit', title: 'Salir (Esc)', onclick: () => close() }, icon('close', 16), h('span', { class: 'hud-key' }, 'Esc'));
 const hud = h('div', { class: 'hud' },
   h('span', { class: 'hud-logo' }, h('img', { src: 'icon.svg', alt: '' }), 'ARACNE'),
   h('span', { class: 'hud-sep' }, '//'),
-  status, progressBar, invertBtn, lectorBtn, exitBtn);
+  status, progressBar, counter, spiderBtn, invertBtn, lectorBtn, exitBtn);
 const hint = h('div', { class: 'hint' }, icon('lens', 14), 'Arrastra un recuadro para analizar esa zona con la lupa · Esc para salir');
 const stage = h('div', { class: 'stage' }, base, inv, h('div', { class: 'vignette' }), selLayer, hud, hint);
 const panelWrap = h('div', { class: 'ov-panel' });
@@ -64,6 +66,7 @@ panel = new Panel({
 api.on('settings:changed', (s) => {
   settings = s;
   world?.setIntensity(s.animation);
+  world?.setPatrol(s.patrol !== false);
 });
 
 function setInverted(on) {
@@ -107,12 +110,25 @@ async function onOpen(payload) {
   if (!world) {
     world = new SpiderWorld({ host: stage, intensity: settings.animation, solidText: true, stars: true });
     world.canvas.style.zIndex = '3';
+    world.on('arrive', (t) => {
+      const view = railViewFor(t?.species);
+      const btn = panelWrap.querySelector(`.rail-btn[data-view="${view}"]`);
+      if (!btn) return;
+      btn.classList.remove('ping');
+      void btn.offsetWidth;
+      btn.classList.add('ping');
+    });
   } else {
     world.reset();
     world.setIntensity(settings.animation);
   }
+  // Lo que tapa el panel no cuenta como zona de lectura.
+  world.setInsets({ right: (panelWrap.offsetWidth || 478) + 24 });
+  world.setPatrol(settings.patrol !== false);
+  if (!world.active) world.setActive(true);
   world.spawn(Math.min(world.maxSpiders, 5));
   world.setScan(true);
+  counter.textContent = '';
   panel.doc = null;
   panel.show('overview');
   panel.setHead?.('Leyendo tu pantalla…');
@@ -149,12 +165,33 @@ async function onOpen(payload) {
     const r = btn?.getBoundingClientRect();
     return r ? { x: r.left - 4, y: r.top + r.height / 2 } : { x: stage.clientWidth - 420, y: 200 };
   };
-  for (const t of chosen) t.carryTo = panelPoint(t.species === 'dates' ? 'dates' : t.species === 'sources' ? 'sources' : 'context');
+  for (const t of [...chosen, ...rest]) t.carryTo = panelPoint(railViewFor(t.species));
+  world.setReader(doc);
   world.deploy(chosen);
-  rest.forEach((t, i) => world.markOnly(t, 0.8 + i * 0.02));
-  const n = findings.sources.length + findings.dates.filter((d) => d.category !== 'referencia').length + findings.acronyms.length;
-  setStatus(doc.text.trim() ? `${doc.blocks.length} párrafos · ${n} hallazgos` : 'no encontré texto', 1);
+  // El resto aparece cuando una araña lee el renglón donde está.
+  world.addLatent(rest);
+  setStatus(doc.text.trim() ? `${doc.blocks.length} párrafos` : 'no encontré texto', 1);
 }
+
+function railViewFor(species) {
+  return species === 'dates' ? 'dates' : species === 'sources' ? 'sources' : species === 'context' ? 'context' : 'overview';
+}
+
+function toggleSpiders() {
+  if (!world) return;
+  world.setActive(!world.active);
+  spiderBtn.classList.toggle('off', !world.active);
+}
+
+// Contador en vivo
+setInterval(() => {
+  if (!world || !open || !session?.doc) return;
+  const st = world.stats;
+  spiderBtn.classList.toggle('off', !st.active);
+  counter.textContent = st.active
+    ? `${st.found} HALLAZGOS · LEÍDO ${Math.round(st.progress * 100)}%`
+    : `${st.found} HALLAZGOS · EN PAUSA`;
+}, 250);
 
 function setStatus(text, progress) {
   status.textContent = text;
@@ -168,9 +205,11 @@ async function close() {
   token++;
   root.classList.add('closing');
   root.classList.remove('on');
+  world?.setReader(null);
   world?.reset();
   world?.setScan(false);
   await new Promise((r) => setTimeout(r, 380));
+  if (world && !open) world.spiders = []; // la próxima vez vuelven a bajar colgadas de su hilo
   root.classList.remove('opening', 'closing');
   clear(selLayer);
   await api.overlay.hide();

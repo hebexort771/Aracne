@@ -338,7 +338,60 @@ export class Panel {
     const keyw = f.keywords.slice(0, 14);
     const keys = keyw.length ? h('div', { class: 'card' }, h('div', { class: 'kicker' }, 'Conceptos que más se repiten'), h('div', { class: 'tags' }, keyw.map(([, , d]) => h('span', { class: 'tag' }, d)))) : null;
 
-    clear(this.body, tiles, reading, gist, keys);
+    clear(this.body, tiles, this.factsCard(f.general), reading, gist, keys);
+  }
+
+  /** Lo que la araña de datos sacó de cualquier tipo de texto. */
+  factsCard(g) {
+    if (!g) return null;
+    const rank = { money: 0, percent: 1, number: 2, measure: 3 };
+    const seen = new Set();
+    const numbers = [...g.numbers]
+      .filter((n) => !seen.has(n.raw) && seen.add(n.raw))
+      .sort((a, b) => rank[a.kind] - rank[b.kind] || a.start - b.start)
+      .slice(0, 8)
+      .sort((a, b) => a.start - b.start);
+    const total = g.numbers.length + g.definitions.length + g.names.length + g.quotes.length + g.emails.length + g.phones.length;
+    if (!total) return null;
+    const go = (start, end, color) => () => this.goTo(this.doc.rectsFor(start, end), color);
+    const item = (cls, strong, text, start, end, color) => {
+      const el = h('button', { class: `fact ${cls}`, onclick: go(start, end, color) }, strong ? h('strong', {}, strong) : null, h('span', {}, text));
+      this.hoverLink(el, () => this.doc.rectsFor(start, end), color);
+      return el;
+    };
+    const short = (t, n = 130) => (t.length > n ? `${t.slice(0, n - 1)}…` : t);
+    const parts = [];
+    if (numbers.length) {
+      // En una tabla la celda solo tiene la cifra: se usa la celda anterior como etiqueta.
+      const describe = (n) => {
+        if (n.context.length > n.raw.length + 12) return short(n.context);
+        const b = this.doc.blockAt(n.start);
+        const prev = b ? this.doc.blocks[b.id - 2] : null;
+        return prev ? `${short(prev.text, 90)} → ${n.raw}` : n.context;
+      };
+      parts.push(h('div', { class: 'facts' }, numbers.map((n) => item('', n.raw, describe(n), n.start, n.end, COLORS.amber))));
+    }
+    if (g.definitions.length) {
+      parts.push(h('div', { class: 'kicker facts-sub' }, 'Definiciones'), h('div', { class: 'facts' }, g.definitions.slice(0, 5).map((d) => item('def', d.term, short(d.sentence, 150), d.start, d.end, COLORS.green))));
+    }
+    const names = g.names.slice(0, 14);
+    if (names.length) {
+      parts.push(h('div', { class: 'kicker facts-sub' }, 'Personas, lugares e instituciones'), h('div', { class: 'tags' }, names.map((n) => {
+        const el = h('button', { class: 'tag name', onclick: go(n.start, n.end, COLORS.violet) }, n.name, n.count > 1 ? h('em', {}, `×${n.count}`) : null);
+        this.hoverLink(el, () => this.doc.rectsFor(n.start, n.end), COLORS.violet);
+        return el;
+      })));
+    }
+    if (g.quotes.length) {
+      parts.push(h('div', { class: 'kicker facts-sub' }, 'Citas textuales'), h('div', { class: 'facts' }, g.quotes.slice(0, 3).map((q) => item('quote', null, `“${short(q.text, 180)}”`, q.start, q.end, COLORS.green))));
+    }
+    const contacts = [...g.emails.map((e) => ({ ...e, kind: 'correo' })), ...g.phones.map((p) => ({ ...p, kind: 'teléfono' }))].slice(0, 8);
+    if (contacts.length) {
+      parts.push(h('div', { class: 'kicker facts-sub' }, 'Contacto'), h('div', { class: 'tags' }, contacts.map((c) => h('button', { class: 'tag contact', title: `Copiar ${c.kind}`, onclick: () => this.copy(c.raw, null, `${c.kind[0].toUpperCase()}${c.kind.slice(1)} copiado`) }, c.raw))));
+    }
+    return h('div', { class: 'card' },
+      h('div', { class: 'card-row' }, h('div', { class: 'kicker' }, 'Datos clave'), h('span', { class: 'muted small' }, `${total} encontrados`)),
+      ...parts);
   }
 
   // ------------------------------------------------------------ Resumen

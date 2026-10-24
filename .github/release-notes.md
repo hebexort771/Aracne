@@ -1,3 +1,14 @@
+### Novedades de la versión 1.1
+
+- **Las arañas ya no se quedan quietas.** Después del rastreo siguen leyendo lo que tienes en pantalla, renglón por renglón. Cada palabra que pasan se enciende y se decodifica, los títulos se reescriben en monoespaciado y dejan hilos de seda, huellas y paquetes de datos que vuelan al panel.
+- **Entran colgadas de su hilo.** Al abrir el atajo, o si bajas mucho en una página, vuelven a bajar desde arriba.
+- **Leen todo tipo de texto.** Nueva araña de *Datos*: montos, porcentajes, medidas y cifras grandes; personas, lugares e instituciones; definiciones; citas textuales; correos y teléfonos. Aparecen en la tarjeta *Datos clave* del panel.
+- **Marcador en vivo** con cuántas arañas hay, cuánto llevan leído y cuántos hallazgos, y un botón para **pausarlas** o volver a soltarlas.
+- En *Ajustes → Animación* puedes apagar la lectura continua.
+- Arreglado: algunas marcas quedaban corridas a la derecha al abrir el panel.
+
+---
+
 **Descarga el instalador de tu sistema** (más abajo, en *Assets*):
 
 | Sistema | Archivo |

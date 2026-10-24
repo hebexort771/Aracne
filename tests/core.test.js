@@ -100,3 +100,38 @@ test('plazos', () => {
   assert.equal((ics.match(/BEGIN:VEVENT/g) || []).length, 3);
   assert.match(googleCalendarUrl(d[1]), /^https:\/\/calendar\.google\.com\/calendar\/render\?action=TEMPLATE/);
 });
+
+import { extractGeneral } from '../src/core/general.js';
+
+test('datos de cualquier texto: cifras, nombres, citas, definiciones y contactos', () => {
+  const t = `La fotosíntesis es un proceso mediante el cual las plantas convierten la luz en energía. En Lima, la Universidad Nacional Mayor de San Marcos recibió a 3.200 estudiantes.
+El costo es S/ 1.250,50 y el 45 % paga en cuotas. Según María Fernanda López, “la educación pública necesita más inversión que nunca”.
+El presupuesto llegó a US$ 30 millones. Escriba a admision@unmsm.edu.pe o llame al Tel. (01) 619-7000. El periodo 2023-2024 fue difícil.
+Se denomina mitosis al proceso de división celular. El objetivo es el aprendizaje.`;
+  const g = extractGeneral(t);
+  const raws = g.numbers.map((n) => n.raw);
+  assert.ok(raws.includes('S/ 1.250,50'));
+  assert.ok(raws.includes('45 %'));
+  assert.ok(raws.includes('US$ 30 millones'));
+  assert.ok(raws.includes('3.200 estudiantes'));
+  assert.equal(g.numbers.find((n) => n.raw === 'US$ 30 millones').value, 30e6);
+  assert.equal(g.numbers.find((n) => n.raw === 'S/ 1.250,50').value, 1250.5);
+  assert.deepEqual(g.emails.map((e) => e.raw), ['admision@unmsm.edu.pe']);
+  assert.deepEqual(g.phones.map((p) => p.raw), ['(01) 619-7000']);
+  assert.equal(g.quotes.length, 1);
+  const names = g.names.map((n) => n.name);
+  assert.ok(names.includes('Universidad Nacional Mayor de San Marcos'));
+  assert.ok(names.includes('María Fernanda López'));
+  const terms = g.definitions.map((d) => d.term);
+  assert.ok(terms.includes('fotosíntesis'));
+  assert.ok(terms.includes('mitosis'));
+  assert.ok(!terms.includes('objetivo'));
+});
+
+test('datos: respeta tramos ocupados y zonas excluidas', () => {
+  const t = 'Pagar S/ 300 antes del 15 de marzo. Tabla de Contenidos Generales';
+  const taken = [[t.indexOf('S/'), t.indexOf('S/') + 6]];
+  const g = extractGeneral(t, { taken, skip: (pos) => pos >= t.indexOf('Tabla') });
+  assert.equal(g.numbers.length, 0);
+  assert.equal(g.names.length, 0);
+});

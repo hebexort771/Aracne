@@ -71,6 +71,7 @@ export const ICONS = {
   plus: `<svg ${S}><path d="M12 5v14M5 12h14"/></svg>`,
   minus: `<svg ${S}><path d="M5 12h14"/></svg>`,
   focus: `<svg ${S}><path d="M3 9V4h5M21 9V4h-5M3 15v5h5M21 15v5h-5"/><rect x="8" y="10" width="8" height="4" rx="1"/></svg>`,
+  spider: `<svg ${S}><ellipse cx="12" cy="14.5" rx="3.2" ry="4"/><circle cx="12" cy="8.6" r="2.2"/><path d="M9.5 12.5L4 9.5 3 5M9 14.5H3.5L2 18M9.5 16.5L5 20M14.5 12.5L20 9.5 21 5M15 14.5h5.5L22 18M14.5 16.5L19 20"/></svg>`,
   trash: `<svg ${S}><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>`,
 };
 

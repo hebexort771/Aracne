@@ -105,9 +105,15 @@ export async function openSettings(section = null) {
       onChange(v);
     },
   }, label)));
+  const toggle = (label, value, onChange) => {
+    const input = h('input', { type: 'checkbox', checked: value, onchange: (e) => onChange(e.target.checked) });
+    return h('label', { class: 'switch' }, input, h('span', { class: 'slider' }), label);
+  };
   const animSec = h('section', {},
     h('h3', {}, 'Animación de las arañas'),
     seg('animation', s.animation, [['alta', 'Alta'], ['media', 'Media'], ['baja', 'Baja'], ['apagada', 'Sin arañas']], (v) => api.settings.set({ animation: v })),
+    h('p', { class: 'muted small' }, 'Alta: cada palabra que leen se enciende y se decodifica. Media: solo la recuadran. Baja: tres arañas y una línea de lectura.'),
+    toggle('Lectura continua: las arañas siguen leyendo, renglón por renglón, lo que tienes en pantalla', s.patrol !== false, (v) => api.settings.set({ patrol: v })),
     h('h3', {}, 'Colores al activar sobre la pantalla'),
     seg('invert', s.invertScreen, [['auto', 'Automático'], ['siempre', 'Invertir siempre'], ['nunca', 'No invertir']], (v) => api.settings.set({ invertScreen: v })),
     h('p', { class: 'muted small' }, 'Automático invierte las páginas claras para que se vean oscuras, como un rastreador.'));
@@ -193,10 +199,6 @@ export async function openSettings(section = null) {
   renderAi();
 
   // Memoria e inicio
-  const toggle = (label, value, onChange) => {
-    const input = h('input', { type: 'checkbox', checked: value, onchange: (e) => onChange(e.target.checked) });
-    return h('label', { class: 'switch' }, input, h('span', { class: 'slider' }), label);
-  };
   const otherSec = h('section', {},
     h('h3', {}, 'Memoria y privacidad'),
     toggle('Recordar lo que leo para encontrar conexiones (se guarda solo en esta computadora)', s.rememberReading, (v) => api.settings.set({ rememberReading: v })),

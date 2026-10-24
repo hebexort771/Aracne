@@ -4,6 +4,7 @@ function mockApi() {
   let settings = {
     shortcut: 'CommandOrControl+Shift+Space',
     animation: 'alta',
+    patrol: true,
     invertScreen: 'auto',
     rememberReading: true,
     openAtLogin: false,
@@ -22,6 +23,7 @@ function mockApi() {
       get: async () => settings,
       set: async (patch) => {
         settings = { ...settings, ...patch };
+        for (const cb of listeners['settings:changed'] || []) cb(settings);
         return { settings, shortcut: { ok: true }, shortcutLabel: '⌘⇧Espacio' };
       },
     },
