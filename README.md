@@ -25,7 +25,7 @@
 | Mac con chip M (M1, M2, M3, M4…) | [`Aracne-mac-arm64.dmg`](../../releases/latest/download/Aracne-mac-arm64.dmg) |
 | Mac con Intel | [`Aracne-mac-x64.dmg`](../../releases/latest/download/Aracne-mac-x64.dmg) |
 | Windows 10 / 11 | [`Aracne-windows-x64.exe`](../../releases/latest/download/Aracne-windows-x64.exe) |
-| Linux | [`Aracne-linux-x64.AppImage`](../../releases/latest/download/Aracne-linux-x64.AppImage) · [`.deb`](../../releases/latest/download/Aracne-linux-x64.deb) |
+| Linux | [`Aracne-linux-x86_64.AppImage`](../../releases/latest/download/Aracne-linux-x86_64.AppImage) · [`.deb`](../../releases/latest/download/Aracne-linux-amd64.deb) |
 
 La app todavía no está firmada por Apple ni por Microsoft, así que la primera vez:
 

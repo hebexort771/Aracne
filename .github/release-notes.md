@@ -5,8 +5,8 @@
 | Mac con chip M (M1, M2, M3, M4…) | `Aracne-mac-arm64.dmg` |
 | Mac con Intel | `Aracne-mac-x64.dmg` |
 | Windows 10 / 11 | `Aracne-windows-x64.exe` |
-| Linux (cualquier distribución) | `Aracne-linux-x64.AppImage` |
-| Ubuntu / Debian | `Aracne-linux-x64.deb` |
+| Linux (cualquier distribución) | `Aracne-linux-x86_64.AppImage` |
+| Ubuntu / Debian | `Aracne-linux-amd64.deb` |
 
 **La primera vez que la abras:**
 - **Mac:** arrastra Aracne a Aplicaciones y ábrela. Si dice que no puede comprobar la app: *Ajustes del Sistema → Privacidad y seguridad → Abrir igualmente*. Luego dale permiso de *Grabación de pantalla* para usar el atajo.
