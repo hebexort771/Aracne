@@ -7,7 +7,8 @@
 <p align="center">
   <b>Arañas digitales que leen contigo.</b><br>
   Pulsa <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Espacio</kbd> (en Mac <kbd>⌘</kbd> + <kbd>⇧</kbd> + <kbd>Espacio</kbd>) sobre cualquier página, PDF o documento<br>
-  y unas arañas bajarán colgadas de su hilo a leer tu pantalla renglón por renglón: verifican fuentes, encuentran plazos, cifras y nombres, resumen, explican imágenes y te ayudan a estudiar.
+  y unas arañas saldrán de un agujero negro a leer todo el documento, renglón por renglón, bajando la página solas:<br>
+  verifican fuentes, encuentran plazos, cifras y nombres, resumen, explican imágenes y te ayudan a estudiar.
 </p>
 
 <p align="center">
@@ -29,7 +30,7 @@
 
 La app todavía no está firmada por Apple ni por Microsoft, así que la primera vez:
 
-- **Mac:** si dice que no puede comprobarla → *Ajustes del Sistema → Privacidad y seguridad → Abrir igualmente*. Para usar el atajo, activa Aracne en *Grabación de pantalla* y reinicia la app.
+- **Mac:** si dice que no puede comprobarla → *Ajustes del Sistema → Privacidad y seguridad → Abrir igualmente*. Para usar el atajo, activa Aracne en *Grabación de pantalla* y reinicia la app. Para que las arañas bajen la página solas, actívala también en *Accesibilidad* (como la app no está firmada, puede que tengas que volver a darle estos permisos después de cada actualización).
 - **Windows:** si aparece "Windows protegió tu PC" → *Más información → Ejecutar de todas formas*.
 - **Linux:** da permiso de ejecución al `.AppImage` (clic derecho → Propiedades).
 
@@ -51,17 +52,23 @@ Cada araña tiene un trabajo:
 | **Visión** | La **lupa araña**: encierra un gráfico, una fórmula (la escribe en LaTeX), una tabla o una foto y te la explica. Sin IA, copia el texto de la zona con OCR. | Sí (opcional) |
 | **Letra pequeña** | Marca las trampas de contratos, matrículas y suscripciones. | Sí |
 
-### Arañas que no se quedan quietas
+### Cómo trabajan las arañas
 
-Después del primer rastreo, las arañas **siguen leyendo** lo que tienes en pantalla, renglón por renglón: cada palabra que pasan se enciende y se decodifica, los títulos se reescriben en monoespaciado, dejan hilos de seda y huellas, y lo que encuentran vuela como un paquete de datos hacia el panel. Si bajas en la página, vuelven a entrar colgadas de su hilo.
+1. **Salen de un agujero negro.** Al pulsar el atajo se abre un agujero en el centro, la pantalla se oscurece poco a poco como tinta y las arañas salen de un saltito, una por una.
+2. **Leen todo, renglón por renglón.** Cada palabra que pasan se enciende y se decodifica; lo que encuentran (fechas, fuentes, cifras, nombres…) se marca y vuela como un paquete de datos a la burbujita.
+3. **Bajan la página solas.** Cuando terminan lo que se ve, giran la rueda del mouse en tu aplicación (Chrome, el visor de PDF, Word…), leen lo nuevo y siguen hasta el final del documento.
+4. **Enmarcar.** Con el botón *Enmarcar* dibujas un recuadro y solo escanean esa parte.
+5. **Vuelven a esconderse.** Al terminar caminan hasta el agujero, se despiden con una patita, se meten girando y la pantalla vuelve a la normalidad. Lo que encontraron queda en una **burbujita**: tócala para abrir el panel y ocúltalo con » cuando quieras seguir leyendo.
 
-- El marcador de abajo a la izquierda muestra cuántas arañas hay, cuánto llevan leído y cuántos hallazgos.
-- **Pausar** hace que se vayan trepando (las marcas se quedan); **Soltar arañas** las trae de vuelta.
-- En *Ajustes → Animación* eliges la intensidad (Alta, Media, Baja o sin arañas) y puedes apagar la lectura continua.
+`Esc` (o el atajo otra vez) las manda de vuelta al agujero antes de terminar. En el lector funciona igual: escanean todo el documento bajando solas, puedes enmarcar una parte y ocultar el panel.
+
+- **Mac:** para bajar la página en otras aplicaciones necesitan el permiso de *Accesibilidad* (Aracne lo pide la primera vez).
+- **Linux:** funciona en sesiones X11. En Wayland leen solo lo que se ve.
+- En *Ajustes → Animación* eliges la intensidad (Alta, Media, Baja o sin arañas) y si deben bajar la página solas.
 
 ### Dos formas de usarla
 
-1. **Sobre cualquier aplicación** con el atajo: toma una captura, la invierte con una línea de escaneo, la lee con OCR en tu computadora y suelta las arañas. `Esc` para salir.
+1. **Sobre cualquier aplicación** con el atajo: toma una captura, la oscurece desde el agujero negro, la lee con OCR en tu computadora y las arañas recorren todo el documento. `Esc` para terminar antes.
 2. **En el lector**: pega un enlace o arrastra un PDF, Word (`.docx`), imagen, `.txt`, `.md` o `.html`.
 
 ### IA gratis
@@ -93,15 +100,17 @@ npm run dist       # instaladores para tu sistema en release/
 
 ```
 electron/            proceso principal
-  main.js            ventanas, atajo global, bandeja, captura de pantalla, IPC
+  main.js            ventanas, atajo global, bandeja, captura de pantalla, burbuja, IPC
+  input.js           gira la rueda del mouse en otras apps (@jitsi/robotjs) para bajar la página
   ai.js              Ollama, Gemini, Claude, OpenAI/compatibles
   sources.js         verificación de DOI/ISBN/PubMed/arXiv/enlaces
   memory.js          memoria de lecturas (local)
   settings.js        ajustes; claves cifradas con safeStorage
   web.js             carga páginas web completas (incluye las que usan JavaScript)
 src/
-  spiders/engine.js  motor de arañas: patas con cinemática inversa, lectura por renglones, seda, recuadros neón, etiquetas
-  core/              extractores sin IA (fuentes, fechas, siglas, referencias, cifras, nombres, definiciones), APA 7, .ics, OCR
+  spiders/engine.js  motor de arañas: patas con cinemática inversa, lectura por renglones, agujero negro, seda, recuadros neón
+  core/              extractores sin IA (fuentes, fechas, siglas, referencias, cifras, nombres, definiciones), APA 7, .ics, OCR,
+                     documento de pantalla de varias páginas y medición del desplazamiento entre capturas
   ai/tasks.js        resumen con párrafos citados, preguntas, estudio, visión, letra pequeña
   panel/panel.js     panel lateral (compartido por el lector y la capa de pantalla)
   lector/            lector de web, PDF (pdf.js), Word (mammoth), texto e imágenes
@@ -113,7 +122,7 @@ docs/                página web (GitHub Pages)
 ### Publicar una versión
 
 1. Sube los cambios a `main`.
-2. En GitHub → **Releases → Draft a new release** → etiqueta `v1.1.1` (o la que siga) → **Publish release**.
+2. En GitHub → **Releases → Draft a new release** → etiqueta `v1.2.1` (o la que siga) → **Publish release**.
 3. GitHub Actions compila Mac, Windows y Linux (unos 15 minutos) y adjunta los instaladores.
 
 ## Licencia

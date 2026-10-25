@@ -139,3 +139,17 @@
 .sh-btn { height: 22px; display: inline-flex; align-items: center; gap: 5px; padding: 0 8px; border-radius: 7px; border: 1px solid var(--line-2); background: transparent; color: var(--text-2); font: 600 10.5px var(--mono); letter-spacing: .04em; cursor: pointer; }
 .sh-btn:hover { color: #fff; border-color: var(--cyan); }
 .spider-hud.paused .sh-btn { color: var(--cyan); border-color: rgba(60, 240, 255, .5); }
+
+/* Enmarcar la zona que deben escanear */
+.frame-layer { position: absolute; inset: 0; z-index: 14; display: none; cursor: crosshair; background: rgba(4, 5, 12, .22); }
+.frame-layer.on { display: block; }
+.frame-draft { position: absolute; border: 1.5px dashed var(--cyan); border-radius: 6px; background: rgba(60, 240, 255, .06); box-shadow: 0 0 30px rgba(60, 240, 255, .25); }
+.frame-hint { color: var(--cyan); border-color: rgba(60, 240, 255, .45); }
+
+/* Burbujita para volver a abrir el panel */
+.lector-bubble { position: absolute; right: 18px; top: 50%; z-index: 13; width: 56px; height: 56px; margin-top: -28px; border-radius: 50%; border: 1px solid rgba(169, 139, 255, .55); background: radial-gradient(circle at 35% 30%, #1d1640, #07060f 70%); color: #e9e3ff; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 12px 40px rgba(0, 0, 0, .5), 0 0 26px rgba(169, 139, 255, .35); transform: scale(0); transition: transform .45s cubic-bezier(.2, 1.4, .3, 1); }
+.no-panel:not(.is-home) .lector-bubble { transform: scale(1); }
+.lector-bubble svg { filter: drop-shadow(0 0 6px rgba(169, 139, 255, .8)); }
+.lector-bubble .bubble-count { position: absolute; left: -4px; top: -2px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: var(--magenta); color: #fff; font: 700 10.5px/20px var(--mono); }
+.lector-bubble .bubble-count:empty { display: none; }
+.lector-bubble.ping { animation: rail-ping .6s ease-out; }

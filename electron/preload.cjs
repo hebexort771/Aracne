@@ -55,9 +55,14 @@ contextBridge.exposeInMainWorld('aracne', {
     hide: invoke('overlay:hide'),
     openLector: invoke('overlay:open-lector'),
     activate: invoke('overlay:activate'),
+    capture: invoke('overlay:capture'),
+    scroll: invoke('overlay:scroll'),
+    input: invoke('overlay:input'),
+    dock: invoke('overlay:dock'),
   },
   perms: {
     openScreenSettings: invoke('perm:open-screen-settings'),
+    openAccessibility: invoke('perm:open-accessibility'),
     relaunch: invoke('app:relaunch'),
   },
   on(channel, callback) {

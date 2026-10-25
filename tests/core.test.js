@@ -135,3 +135,29 @@ test('datos: respeta tramos ocupados y zonas excluidas', () => {
   assert.equal(g.numbers.length, 0);
   assert.equal(g.names.length, 0);
 });
+
+import { estimateShift, refineShift } from '../src/core/scroll.js';
+
+test('desplazamiento entre capturas: encuentra cuánto bajó la página aunque haya barras fijas', () => {
+  const w = 120, h = 200, H = 1200;
+  // Documento "largo" con renglones de texto simulados.
+  const doc = new Float32Array(w * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < w; x++) doc[y * w + x] = (Math.floor(y / 9) % 3 === 0 && (x * 7 + y * 3) % 11 < 5) ? 30 : 235 - ((y * 13) % 17);
+  const shot = (scroll) => {
+    const img = new Float32Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      // Cabecera fija de 20 filas (como la barra del navegador).
+      img[y * w + x] = y < 20 ? 90 + (x % 5) * 10 : doc[(y + scroll) * w + x];
+    }
+    return img;
+  };
+  const a = shot(100), b = shot(237);
+  const r = estimateShift(a, b, w, h);
+  assert.equal(r.moved, true);
+  assert.ok(Math.abs(r.dy - 137) <= 1, `dy=${r.dy}`);
+  assert.equal(refineShift(a, b, w, h, r.dy + 2, 4), 137);
+  // Sin cambios: llegó al final.
+  const same = estimateShift(b, shot(237), w, h);
+  assert.equal(same.moved, false);
+  assert.equal(same.dy, 0);
+});

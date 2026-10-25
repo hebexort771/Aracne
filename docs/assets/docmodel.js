@@ -307,6 +307,186 @@ export class DomDoc {
   }
 }
 
+/** Tesseract a veces junta varios párrafos: se separan por saltos verticales, cambios de margen o de tamaño. */
+export function ocrParagraphs(page, minConfidence = 55) {
+  const paragraphs = [];
+  for (const block of page.blocks || []) {
+    for (const para of block.paragraphs || []) {
+      let cur = [];
+      let prev = null;
+      for (const line of para.lines || []) {
+        const words = (line.words || []).filter((w) => w.text.trim() && (w.confidence >= minConfidence || w.text.length > 3));
+        if (!words.length) continue;
+        const lh = line.bbox.y1 - line.bbox.y0;
+        if (prev) {
+          const gap = line.bbox.y0 - prev.bbox.y1;
+          const prevH = prev.bbox.y1 - prev.bbox.y0;
+          const jumpX = Math.abs(line.bbox.x0 - prev.bbox.x0) > Math.max(lh, prevH) * 6;
+          if (gap > Math.max(lh, prevH) * 0.75 || jumpX || Math.abs(lh - prevH) > prevH * 0.45) {
+            paragraphs.push(cur);
+            cur = [];
+          }
+        }
+        cur.push({ line, words });
+        prev = line;
+      }
+      if (cur.length) paragraphs.push(cur);
+    }
+  }
+  return paragraphs;
+}
+
+/**
+ * Documento de pantalla de varias páginas: cada vez que las arañas bajan la página se agrega
+ * lo nuevo (sin repetir lo que ya estaba). Las posiciones están en coordenadas del "mundo"
+ * (la tira de capturas cosidas una debajo de otra).
+ */
+export class ScreenDoc {
+  constructor({ kind = 'screen', title = 'Tu pantalla', source = '' } = {}) {
+    Object.assign(this, { kind, title, source });
+    this.words = [];
+    this.lines = [];
+    this.blocks = [];
+    this.text = '';
+    this.lang = 'es';
+    this.pages = 0;
+  }
+
+  /**
+   * @param {object} page resultado de tesseract
+   * @param {(bbox:{x0,y0,x1,y1}) => {x,y,w,h}} map píxeles de la captura → mundo
+   * @param {object} [o]
+   * @param {number} [o.minY] se ignoran los renglones cuyo centro queda por encima (ya leídos)
+   * @param {number} [o.maxY] y los cortados por el borde de abajo (se leen en la página siguiente)
+   * @param {{x,y,w,h}} [o.region] solo lo que cae dentro (zona enmarcada)
+   */
+  addPage(page, map, { minY = -Infinity, maxY = Infinity, region = null, minConfidence = 55 } = {}) {
+    const before = this.blocks.length;
+    const inside = (r) => {
+      const cy = r.y + r.h / 2, cx = r.x + r.w / 2;
+      if (cy < minY || r.y + r.h > maxY) return false;
+      if (region && (cy < region.y || cy > region.y + region.h || cx < region.x || cx > region.x + region.w)) return false;
+      return true;
+    };
+    let text = this.text;
+    for (const para of ocrParagraphs(page, minConfidence)) {
+      const lines = para.map(({ line, words }) => ({ box: map(line.bbox), words })).filter((l) => inside(l.box));
+      if (!lines.length) continue;
+      if (text.length) text += '\n\n';
+      const pStart = text.length;
+      const blockId = this.blocks.length + 1;
+      let box = null;
+      lines.forEach(({ box: lb, words }, li) => {
+        if (li > 0) text += '\n';
+        const line = { box: lb, block: blockId, idx: li, words: [] };
+        const lineIdx = this.lines.length;
+        this.lines.push(line);
+        box = box ? unionBox(box, lb) : { ...lb };
+        words.forEach((w, i) => {
+          if (i > 0) text += ' ';
+          const word = { start: text.length, end: text.length + w.text.length, box: map(w.bbox), line: lineIdx, text: w.text };
+          this.words.push(word);
+          line.words.push(word);
+          text += w.text;
+        });
+      });
+      const pText = text.slice(pStart).replace(/\s+/g, ' ').trim();
+      if (pText.length < 2) continue;
+      // Título: renglón corto sin punto final cuyo texto llena su caja (no una barra de herramientas).
+      const nWords = pText.split(/\s+/).length;
+      const heading = pText.length < 70 && nWords <= 9 && !/[.,;:]$/.test(pText) && lines.length === 1 && box.w <= pText.length * box.h * 0.85;
+      this.blocks.push({ id: blockId, start: pStart, end: text.length, text: pText, type: heading ? 'heading' : 'p', box, page: this.pages + 1 });
+    }
+    this.text = text;
+    this.pages++;
+    this.lang = detectLang(this.text);
+    this._words = undefined;
+    return { added: this.blocks.length - before };
+  }
+
+  rectsFor(start, end) {
+    const byLine = new Map();
+    for (const w of this.wordsIn(start, end)) {
+      const prev = byLine.get(w.line);
+      byLine.set(w.line, prev ? unionBox(prev, w.box) : { ...w.box });
+    }
+    return [...byLine.values()];
+  }
+
+  wordsIn(start, end) {
+    // Búsqueda binaria: las palabras están en orden de texto.
+    const ws = this.words;
+    let lo = 0, hi = ws.length - 1, first = ws.length;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (ws[mid].end > start) {
+        first = mid;
+        hi = mid - 1;
+      } else lo = mid + 1;
+    }
+    const out = [];
+    for (let i = first; i < ws.length && ws[i].start < end; i++) out.push(ws[i]);
+    return out;
+  }
+
+  wordsText(start, end) {
+    return this.wordsIn(start, end).map((w) => w.text).join(' ');
+  }
+
+  blockRects(id) {
+    const b = this.blocks[id - 1];
+    return b ? [b.box] : [];
+  }
+
+  blockAt(pos) {
+    let lo = 0, hi = this.blocks.length - 1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      const b = this.blocks[mid];
+      if (pos < b.start) hi = mid - 1;
+      else if (pos > b.end) lo = mid + 1;
+      else return b;
+    }
+    return null;
+  }
+
+  scrollToRects() {}
+
+  visibleBlocks() {
+    return this.blocks;
+  }
+
+  readingLines(view) {
+    const out = [];
+    this.lines.forEach((l, i) => {
+      const r = l.box;
+      if (!l.words.length || r.w < 8 || r.h < 5 || r.y + r.h < view.y || r.y > view.y + view.h) return;
+      out.push({
+        key: `S${i}`,
+        block: l.block,
+        idx: l.idx,
+        ...r,
+        start: l.words[0].start,
+        end: l.words[l.words.length - 1].end,
+        words: () => l.words.map((w) => ({ ...w.box, text: w.text })).sort((a, b) => a.x - b.x),
+      });
+    });
+    return out;
+  }
+
+  wordCount() {
+    return this.words.length;
+  }
+
+  destroy() {}
+}
+
+function unionBox(a, b) {
+  const x0 = Math.min(a.x, b.x), y0 = Math.min(a.y, b.y);
+  const x1 = Math.max(a.x + a.w, b.x + b.w), y1 = Math.max(a.y + a.h, b.y + b.h);
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+
 /** Documento hecho con reconocimiento de texto (OCR) de una captura de pantalla. */
 export class OcrDoc {
   /**

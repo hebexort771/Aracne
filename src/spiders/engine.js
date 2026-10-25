@@ -212,6 +212,9 @@ class Spider {
     this.anchor = { x, y }; // punto donde está pegado su hilo de seda
     this.travel = 0;
     this.dead = false;
+    this.scale = 1;
+    this.blinkT = rand(1, 4);
+    this.blinking = 0;
     this.legs = [];
     for (let i = 0; i < 4; i++) {
       this.legs.push(new Leg(this, -1, i), new Leg(this, 1, i));
@@ -263,9 +266,20 @@ class Spider {
     this.flash = Math.max(0, this.flash - dt * 2.2);
     this.slow = Math.max(0, this.slow - dt);
     if (this.tag) this.tag.age += dt;
+    // Parpadeo
+    this.blinkT -= dt;
+    if (this.blinkT <= 0) {
+      this.blinking = 0.14;
+      this.blinkT = Math.random() < 0.2 ? 0.25 : rand(2, 5.5); // a veces parpadea dos veces
+    }
+    this.blinking = Math.max(0, this.blinking - dt);
 
     if (this.state === 'drop' || this.state === 'leave') {
       this.updateHanging(dt, time);
+      return;
+    }
+    if (this.state === 'emerge' || this.state === 'wave' || this.state === 'vanish') {
+      this.updatePortal(dt, time);
       return;
     }
 
@@ -332,6 +346,23 @@ class Spider {
       case 'read':
         this.updateReading(dt);
         break;
+      case 'exit': {
+        // Camina hacia el agujero negro
+        const p = w.portalWorld();
+        if (!p) {
+          this.state = 'wander';
+          break;
+        }
+        const d = this.seek(p.x, p.y, dt, 1.15, 50);
+        if (d < p.r * 1.7 + 14) {
+          this.state = 'wave';
+          this.timer = rand(0.45, 0.7);
+          this.vx = 0;
+          this.vy = 0;
+          this.heading = Math.atan2(p.y - this.y, p.x - this.x);
+        }
+        break;
+      }
       default: {
         this.timer -= dt;
         if (this.timer <= 0) {
@@ -430,6 +461,113 @@ class Spider {
     for (const leg of this.legs) leg.dangle(time);
   }
 
+  // ---------- Agujero negro: salir, despedirse y entrar ----------
+
+  startEmerge(center, delay) {
+    this.state = 'emerge';
+    this.delay = delay;
+    this.timer = 0;
+    this.cx = center.x;
+    this.cy = center.y;
+    this.x = center.x;
+    this.y = center.y;
+    this.vx = 0;
+    this.vy = 0;
+    this.scale = 0;
+    this.alpha = 1;
+    this.emergeDir = rand(0, TAU);
+    this.emergeDist = rand(70, 130);
+    this.heading = this.emergeDir;
+  }
+
+  updatePortal(dt, time) {
+    const w = this.world;
+    if (this.state === 'emerge') {
+      if (this.delay > 0) {
+        this.delay -= dt;
+        const p = w.portalWorld();
+        if (p) {
+          this.x = p.x;
+          this.y = p.y;
+        }
+        for (const leg of this.legs) leg.dangle(time);
+        return;
+      }
+      if (this.timer === 0) {
+        const p = w.portalWorld();
+        if (p) {
+          this.cx = p.x;
+          this.cy = p.y;
+        }
+        w.sparkle(this.cx, this.cy, this.accent, 6);
+      }
+      this.timer += dt;
+      const k = clamp(this.timer / 0.8, 0, 1);
+      // Sale de un saltito, creciendo con rebote, y se sacude al aterrizar.
+      this.scale = clamp(easeOutBack(Math.min(1, k * 1.25)), 0, 1.15);
+      const d = this.emergeDist * easeOut(k);
+      this.x = this.cx + Math.cos(this.emergeDir) * d;
+      this.y = this.cy + Math.sin(this.emergeDir) * d - Math.sin(k * Math.PI) * 26;
+      this.heading = this.emergeDir + Math.sin(k * 12) * 0.12 * (1 - k);
+      for (const leg of this.legs) leg.dangle(time);
+      if (k >= 1) {
+        this.scale = 1;
+        this.state = 'wander';
+        this.vx = Math.cos(this.emergeDir) * 90;
+        this.vy = Math.sin(this.emergeDir) * 90;
+        for (const leg of this.legs) {
+          const r = leg.restPoint();
+          leg.foot = { ...r };
+          leg.t = 1;
+        }
+        this.anchor = this.tail();
+        this.timer = rand(0.2, 0.6);
+        w.ripple(this.x, this.y, this.accent);
+      }
+      return;
+    }
+    if (this.state === 'wave') {
+      // Se despide moviendo una patita antes de entrar
+      this.timer -= dt;
+      const waver = this.legs[1]; // delantera derecha
+      const hip = waver.hip();
+      const a = this.heading - 1.25 + Math.sin(time * 16) * 0.35;
+      waver.foot = { x: hip.x + Math.cos(a) * waver.reach * 0.8, y: hip.y + Math.sin(a) * waver.reach * 0.8 - 6 };
+      if (this.timer <= 0) {
+        const p = w.portalWorld();
+        this.state = 'vanish';
+        this.timer = 0;
+        this.cx = p ? p.x : this.x;
+        this.cy = p ? p.y : this.y;
+        this.orbitA = Math.atan2(this.y - this.cy, this.x - this.cx);
+        this.orbitR = Math.hypot(this.x - this.cx, this.y - this.cy);
+      }
+      return;
+    }
+    if (this.state === 'vanish') {
+      // Gira en espiral hacia el centro, cada vez más pequeña, y desaparece con un destello.
+      const p = w.portalWorld();
+      if (p) {
+        this.cx = p.x;
+        this.cy = p.y;
+      }
+      this.timer += dt;
+      const k = clamp(this.timer / 1.05, 0, 1);
+      const ang = this.orbitA + k * k * TAU * 1.4;
+      const r = this.orbitR * (1 - k * k * (3 - 2 * k));
+      this.x = this.cx + Math.cos(ang) * r;
+      this.y = this.cy + Math.sin(ang) * r;
+      this.heading = ang + Math.PI / 2 + k * 2;
+      this.scale = Math.max(0, 1 - k ** 1.4);
+      for (const leg of this.legs) leg.dangle(time);
+      if (k >= 1) {
+        this.dead = true;
+        w.sparkle(this.cx, this.cy, this.accent, 5);
+        w.emit('vanished', this);
+      }
+    }
+  }
+
   // ---------- Lectura renglón por renglón ----------
 
   startLine(L) {
@@ -441,6 +579,7 @@ class Spider {
     this.latentHere = null;
     this.trail = null;
     this.readT = 0;
+    this.dir = 0;
   }
 
   updateReading(dt) {
@@ -452,51 +591,68 @@ class Spider {
     }
     this.readT += dt;
     const cy = L.y + L.h / 2;
+    const xStart = Math.max(L.x, w.usableRect().x);
     const xEnd = Math.min(L.x + L.w, w.usableRight());
     if (this.phase === 'approach') {
-      const d = this.seek(L.x - 4, cy, dt, 1.15, 40);
-      if (this.readT > 4) {
+      // Lee hacia el lado que le queda más cerca (en zigzag, como quien recorre con el dedo).
+      if (!this.dir) this.dir = Math.abs(this.x - xStart) <= Math.abs(this.x - xEnd) ? 1 : -1;
+      const tx = this.dir > 0 ? xStart - 4 : xEnd + 4;
+      const d = this.seek(tx, cy, dt, 1.15 * Math.max(1, w.readBoost * 0.9), 30);
+      if (this.readT > 5) {
         this.endLine(false);
         return;
       }
       if (d < 16) {
         this.phase = 'sweep';
-        this.sweepX = Math.max(L.x, Math.min(this.x, L.x + 10));
-        this.words = L.words ? L.words() : [];
+        this.sweepX = this.dir > 0 ? Math.max(xStart, Math.min(this.x, xStart + 10)) : Math.min(xEnd, Math.max(this.x, xEnd - 10));
+        const words = L.words ? L.words() : [];
+        this.words = this.dir > 0 ? words : words.slice().reverse();
         this.wordIdx = 0;
-        this.latentHere = w.latentOn(L);
+        const lat = w.latentOn(L);
+        this.latentHere = this.dir > 0 ? lat : lat.slice().sort((a, b) => b.x1 - a.x1);
         this.trail = w.startTrail(this, L);
+        this.trail.dir = this.dir;
         this.attachSilk();
       }
       return;
     }
+    const dir = this.dir;
     // Avanza por el renglón a velocidad de lectura; frena un poco al atrapar algo.
-    const spd = this.readSpeed * (this.slow > 0 ? 0.3 : 1) * (L.loud ? 1 : 1.35);
-    this.sweepX += spd * dt;
-    const dvx = spd + (this.sweepX - this.x) * 5;
+    const spd = this.readSpeed * w.readBoost * (this.slow > 0 ? 0.3 : 1) * (L.loud ? 1 : 1.35);
+    this.sweepX += dir * spd * dt;
+    const dvx = dir * spd + (this.sweepX - this.x) * 5;
     const dvy = (cy - this.y) * 9;
     const k = Math.min(1, dt * 12);
     this.vx = lerp(this.vx, dvx, k);
     this.vy = lerp(this.vy, dvy, k);
     const head = this.x + Math.cos(this.heading) * 9 * this.size;
-    if (this.trail) this.trail.x1 = clamp(head, L.x, xEnd);
+    const hx = clamp(head, xStart, xEnd);
+    if (this.trail) {
+      if (dir > 0) {
+        this.trail.x0 = xStart;
+        this.trail.x1 = hx;
+      } else {
+        this.trail.x0 = hx;
+        this.trail.x1 = xEnd;
+      }
+    }
     // Palabras que va pasando
     if (this.words) {
       while (this.wordIdx < this.words.length) {
         const wd = this.words[this.wordIdx];
-        if (wd.x + wd.w * 0.45 > head) break;
+        if (dir > 0 ? wd.x + wd.w * 0.45 > head : wd.x + wd.w * 0.55 < head) break;
         this.wordIdx++;
-        if (wd.x + wd.w <= xEnd + 2) w.onWord(this, wd, L);
+        if (wd.x + wd.w <= xEnd + 2 && wd.x >= xStart - 2) w.onWord(this, wd, L);
       }
     }
     // Hallazgos escondidos en este renglón
     if (this.latentHere?.length) {
-      while (this.latentHere.length && this.latentHere[0].rx <= head) {
+      while (this.latentHere.length && (dir > 0 ? this.latentHere[0].x0 + 4 <= head : this.latentHere[0].x1 - 4 >= head)) {
         const t = this.latentHere.shift().t;
         if (w.reveal(t, this)) this.slow = 0.32;
       }
     }
-    if (this.sweepX >= xEnd + 2) this.endLine(true);
+    if (dir > 0 ? this.sweepX >= xEnd + 2 : this.sweepX <= xStart - 2) this.endLine(true);
   }
 
   endLine(completed, next = true) {
@@ -523,9 +679,15 @@ class Spider {
   draw(ctx, time) {
     const w = this.world;
     const a = this.alpha * w.spiderAlpha;
-    if (a <= 0.01) return;
+    if (a <= 0.01 || this.scale <= 0.02) return;
+    if (this.state === 'emerge' && this.delay > 0) return;
     ctx.save();
     ctx.globalAlpha = a;
+    if (this.scale !== 1) {
+      ctx.translate(this.x, this.y);
+      ctx.scale(this.scale, this.scale);
+      ctx.translate(-this.x, -this.y);
+    }
 
     // Hilo del que cuelga (al bajar o al irse)
     if (this.state === 'drop' || this.state === 'leave') {
@@ -535,7 +697,7 @@ class Spider {
       ctx.moveTo(this.x, this.threadTop);
       ctx.lineTo(this.x, this.y - 6 * this.size);
       ctx.stroke();
-    } else if (w.level.silk && this.anchor) {
+    } else if (w.level.silk && this.anchor && this.state !== 'emerge' && this.state !== 'vanish') {
       // Seda que va soltando
       const tail = this.tail();
       ctx.strokeStyle = rgba(this.accent, 0.22);
@@ -627,12 +789,30 @@ class Spider {
     ctx.fillStyle = glow;
     ctx.fill();
     ctx.shadowBlur = 0;
-    // Ojos
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(4.4 * s0, -1.7 * s0, 1.3, 1.3);
-    ctx.fillRect(4.4 * s0, 0.5 * s0, 1.3, 1.3);
-    ctx.fillStyle = 'rgba(4,5,12,.9)';
-    ctx.fillRect(3.2 * s0, -0.4 * s0, 0.9, 0.9);
+    // Ojitos redondos que parpadean
+    const ex = 3.6 * s0, ey = 1.45 * s0, er = 1.05 * s0 + 0.35;
+    if (this.blinking > 0) {
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 0.9;
+      ctx.beginPath();
+      ctx.moveTo(ex, -ey - er * 0.8); ctx.lineTo(ex, -ey + er * 0.8);
+      ctx.moveTo(ex, ey - er * 0.8); ctx.lineTo(ex, ey + er * 0.8);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(ex, -ey, er, 0, TAU);
+      ctx.arc(ex, ey, er, 0, TAU);
+      ctx.fill();
+      ctx.fillStyle = '#05060d';
+      ctx.beginPath();
+      ctx.arc(ex + er * 0.35, -ey, er * 0.55, 0, TAU);
+      ctx.arc(ex + er * 0.35, ey, er * 0.55, 0, TAU);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(ex + er * 0.45, -ey - er * 0.35, 0.6, 0.6);
+      ctx.fillRect(ex + er * 0.45, ey - er * 0.35, 0.6, 0.6);
+    }
     ctx.restore();
 
     // Lo que está leyendo, en monoespaciado sobre su cabeza
@@ -776,36 +956,49 @@ class WordFlash {
 
 /** Estela de lectura: subrayado brillante del tramo ya leído. */
 class ReadTrail {
-  constructor(L, color, loud) {
+  constructor(L, color, loud, keep = false) {
     this.L = L;
     this.color = color;
     this.loud = loud;
+    this.keep = keep; // en modo escaneo queda una marca suave de "ya leído"
+    this.x0 = L.x;
     this.x1 = L.x;
     this.done = false;
     this.age = 0;
     this.dead = false;
   }
+  get life() {
+    return this.loud ? 1.8 : 1;
+  }
   update(dt) {
     if (this.done) {
       this.age += dt;
-      if (this.age > (this.loud ? 1.8 : 1)) this.dead = true;
+      if (this.age > this.life && !this.keep) this.dead = true;
     }
   }
   draw(ctx) {
     const L = this.L;
-    const w = this.x1 - L.x;
+    const x0 = this.x0;
+    const w = this.x1 - x0;
     if (w <= 1) return;
-    const fade = this.done ? 1 - this.age / (this.loud ? 1.8 : 1) : 1;
+    let fade = this.done ? 1 - this.age / this.life : 1;
     const y = L.y + L.h + 0.5;
-    const g = ctx.createLinearGradient(L.x, 0, this.x1, 0);
-    g.addColorStop(0, rgba(this.color, 0));
-    g.addColorStop(Math.max(0, 1 - 160 / w), rgba(this.color, 0.25 * fade));
+    if (this.keep && fade < 0.22) {
+      // Renglón ya escaneado: hilo fino y tenue
+      ctx.fillStyle = rgba(this.color, 0.22);
+      ctx.fillRect(x0, y - 0.4, w, 0.8);
+      return;
+    }
+    fade = Math.max(0, fade);
+    const g = this.dir < 0 ? ctx.createLinearGradient(this.x1, 0, x0, 0) : ctx.createLinearGradient(x0, 0, this.x1, 0);
+    g.addColorStop(0, rgba(this.color, this.keep ? 0.22 : 0));
+    g.addColorStop(Math.max(0, 1 - 160 / w), rgba(this.color, 0.25 * fade + (this.keep ? 0.1 : 0)));
     g.addColorStop(1, rgba(this.color, 0.95 * fade));
     ctx.fillStyle = g;
-    ctx.fillRect(L.x, y - 0.6, w, 1.3);
+    ctx.fillRect(x0, y - 0.6, w, 1.3);
     if (this.loud) {
       ctx.fillStyle = rgba(this.color, 0.07 * fade);
-      ctx.fillRect(L.x, L.y - 1, w, L.h + 2);
+      ctx.fillRect(x0, L.y - 1, w, L.h + 2);
     }
   }
 }
@@ -1166,6 +1359,174 @@ class Pulse {
 }
 
 // ------------------------------------------------------------------
+// Agujero negro (de donde salen y adonde vuelven las arañas)
+// ------------------------------------------------------------------
+const easeInBack = (t) => 2.70158 * t * t * t - 1.70158 * t * t;
+
+class Portal {
+  constructor(x, y, R) {
+    this.x = x; // coordenadas de pantalla
+    this.y = y;
+    this.R = R;
+    this.r = 0;
+    this.state = 'opening';
+    this.age = 0;
+    this.dead = false;
+    const cols = [COLORS.cyan, COLORS.magenta, COLORS.violet, COLORS.blue, COLORS.white];
+    this.dust = Array.from({ length: 90 }, () => ({
+      a: rand(0, TAU),
+      d: rand(1.15, 3.4),
+      s: rand(0.7, 1.8),
+      c: cols[(Math.random() * cols.length) | 0],
+    }));
+  }
+
+  close() {
+    if (this.state === 'closing') return;
+    this.state = 'closing';
+    this.age = 0;
+  }
+
+  update(dt) {
+    this.age += dt;
+    if (this.state === 'opening') {
+      const k = clamp(this.age / 0.8, 0, 1);
+      this.r = this.R * Math.max(0, easeOutBack(k));
+      if (k >= 1) {
+        this.state = 'open';
+        this.age = 0;
+      }
+    } else if (this.state === 'closing') {
+      // Se infla un poquito ("glup") y se cierra.
+      const k = clamp(this.age / 0.6, 0, 1);
+      this.r = k < 0.3 ? this.R * (1 + 0.22 * Math.sin((k / 0.3) * Math.PI / 2)) : this.R * 1.22 * (1 - easeInBack((k - 0.3) / 0.7));
+      this.r = Math.max(0, this.r);
+      if (k >= 1) this.dead = true;
+    } else {
+      this.r = this.R * (1 + 0.04 * Math.sin(this.age * 2.6));
+    }
+    for (const p of this.dust) {
+      p.a += dt * (2.2 / p.d);
+      p.d -= dt * 0.35 * (this.state === 'closing' ? 4 : 1);
+      if (p.d < 1.05) {
+        p.d = rand(2.6, 3.4);
+        p.a = rand(0, TAU);
+      }
+    }
+  }
+
+  draw(ctx, t) {
+    const r = this.r;
+    if (r < 0.6) return;
+    const { x, y } = this;
+    // Halo
+    const halo = ctx.createRadialGradient(x, y, r * 0.8, x, y, r * 3.4);
+    halo.addColorStop(0, 'rgba(169,139,255,0.38)');
+    halo.addColorStop(0.35, 'rgba(95,114,255,0.14)');
+    halo.addColorStop(1, 'rgba(95,114,255,0)');
+    ctx.fillStyle = halo;
+    ctx.beginPath();
+    ctx.arc(x, y, r * 3.4, 0, TAU);
+    ctx.fill();
+    // Polvo de estrellas que cae en espiral
+    for (const p of this.dust) {
+      const rad = r * p.d;
+      const a = clamp((p.d - 1.05) / 0.35, 0, 1) * clamp((3.4 - p.d) / 0.6, 0, 1);
+      if (a <= 0) continue;
+      ctx.fillStyle = rgba(p.c, 0.85 * a);
+      ctx.fillRect(x + Math.cos(p.a) * rad - p.s / 2, y + Math.sin(p.a) * rad * 0.9 - p.s / 2, p.s, p.s);
+    }
+    // Disco de acreción: arcos que giran
+    ctx.lineCap = 'round';
+    const arcs = [[COLORS.cyan, 1.24, 1.9], [COLORS.magenta, 1.42, -1.3], [COLORS.violet, 1.62, 0.9]];
+    arcs.forEach(([c, k, sp], i) => {
+      const a0 = t * sp + i * 2.1;
+      ctx.strokeStyle = rgba(c, 0.6);
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.arc(x, y, r * k, a0, a0 + Math.PI * 0.85);
+      ctx.stroke();
+      ctx.strokeStyle = rgba(c, 0.25);
+      ctx.beginPath();
+      ctx.arc(x, y, r * k, a0 + Math.PI, a0 + Math.PI * 1.4);
+      ctx.stroke();
+    });
+    ctx.lineCap = 'butt';
+    // Núcleo
+    const core = ctx.createRadialGradient(x, y, 0, x, y, r);
+    core.addColorStop(0, '#000000');
+    core.addColorStop(0.78, '#000000');
+    core.addColorStop(1, '#1c0d3a');
+    ctx.fillStyle = core;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, TAU);
+    ctx.fill();
+    // Anillo de fotones
+    ctx.save();
+    ctx.shadowColor = COLORS.cyan;
+    ctx.shadowBlur = 14;
+    ctx.strokeStyle = 'rgba(235,245,255,0.9)';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.arc(x, y, r * 1.03, 0, TAU);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+/** Destellos y corazoncitos que salen al aparecer o desaparecer una araña. */
+class Sparkle {
+  constructor(x, y, color, heart = false) {
+    const a = rand(0, TAU), v = rand(30, 90);
+    this.x = x;
+    this.y = y;
+    this.vx = Math.cos(a) * v;
+    this.vy = Math.sin(a) * v - (heart ? 30 : 0);
+    this.color = heart ? '#ff7ac8' : color;
+    this.heart = heart;
+    this.size = heart ? rand(4, 6) : rand(2.5, 5);
+    this.age = 0;
+    this.life = heart ? rand(1.1, 1.5) : rand(0.5, 0.9);
+    this.rot = rand(0, TAU);
+    this.dead = false;
+  }
+  update(dt) {
+    this.age += dt;
+    this.x += this.vx * dt;
+    this.y += this.vy * dt;
+    this.vx *= Math.pow(0.15, dt);
+    this.vy = this.vy * Math.pow(0.15, dt) - (this.heart ? 18 * dt : 0);
+    this.rot += dt * 3;
+    if (this.age > this.life) this.dead = true;
+  }
+  draw(ctx) {
+    const f = 1 - this.age / this.life;
+    const s = this.size * (this.heart ? 1 : 0.6 + 0.4 * Math.sin(this.age * 20));
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    if (this.heart) {
+      ctx.fillStyle = rgba(this.color, 0.9 * f);
+      ctx.beginPath();
+      ctx.moveTo(0, s * 0.35);
+      ctx.bezierCurveTo(-s * 1.1, -s * 0.35, -s * 0.45, -s * 1.1, 0, -s * 0.45);
+      ctx.bezierCurveTo(s * 0.45, -s * 1.1, s * 1.1, -s * 0.35, 0, s * 0.35);
+      ctx.fill();
+    } else {
+      ctx.rotate(this.rot);
+      ctx.strokeStyle = rgba(this.color, f);
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(-s, 0); ctx.lineTo(s, 0);
+      ctx.moveTo(0, -s); ctx.lineTo(0, s);
+      ctx.stroke();
+      ctx.fillStyle = rgba(COLORS.white, f);
+      ctx.fillRect(-0.8, -0.8, 1.6, 1.6);
+    }
+    ctx.restore();
+  }
+}
+
+// ------------------------------------------------------------------
 // Mundo
 // ------------------------------------------------------------------
 const LEVELS = {
@@ -1236,6 +1597,17 @@ export class SpiderWorld {
     this.lastPacket = 0;
     this.time = 0;
     this.latentCheck = 0;
+    this.portal = null; // agujero negro (pantalla)
+    this.sparkles = [];
+    this.ink = null; // {x, y, r} anillo de la transición de colores (pantalla)
+    this.scanMode = false; // lee todo en orden, página por página
+    this.region = null; // zona enmarcada (mundo) o función que la devuelve
+    this.readBoost = 1;
+    this.viewDoneFired = false;
+    this.scanCheck = 0;
+    this.exiting = false;
+    this.waiters = [];
+    this.frameRect = null; // zona enmarcada que se dibuja (mundo)
     this.setIntensity(intensity);
     this.resize();
     this.ro = new ResizeObserver(() => this.resize());
@@ -1332,7 +1704,14 @@ export class SpiderWorld {
   usableRect() {
     const v = this.viewRect();
     const i = this.insets;
-    return { x: v.x + i.left, y: v.y + i.top, w: Math.max(80, v.w - i.left - i.right), h: Math.max(80, v.h - i.top - i.bottom) };
+    let r = { x: v.x + i.left, y: v.y + i.top, w: Math.max(80, v.w - i.left - i.right), h: Math.max(80, v.h - i.top - i.bottom) };
+    const g = typeof this.region === 'function' ? this.region() : this.region;
+    if (g) {
+      const x0 = Math.max(r.x, g.x), y0 = Math.max(r.y, g.y);
+      const x1 = Math.min(r.x + r.w, g.x + g.w), y1 = Math.min(r.y + r.h, g.y + g.h);
+      if (x1 - x0 > 20 && y1 - y0 > 20) r = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+    }
+    return r;
   }
 
   usableRight() {
@@ -1354,6 +1733,7 @@ export class SpiderWorld {
       progress: this.totalWords ? Math.min(1, this.wordsRead / this.totalWords) : 0,
       found: this.found,
       active: this.active,
+      linesRead: this.everRead.size,
     };
   }
 
@@ -1392,7 +1772,7 @@ export class SpiderWorld {
 
   /** Mantiene la cantidad de arañas que corresponde. */
   topUp(force = false) {
-    if (!this.active || this.maxSpiders === 0) return;
+    if (!this.active || this.maxSpiders === 0 || this.exiting || this.scanMode) return;
     const want = this.reader && this.patrol ? this.maxSpiders : force ? Math.min(this.maxSpiders, 4) : 0;
     const n = want - this.liveCount();
     if (n > 0) this.spawn(n);
@@ -1447,7 +1827,7 @@ export class SpiderWorld {
       t.seenAt = null;
       this.latent.push(t);
     }
-    if (this.maxSpiders === 0 || !this.active || !this.patrol) this.flushLatent();
+    if (this.maxSpiders === 0 || !this.active || (!this.patrol && !this.scanMode)) this.flushLatent();
   }
 
   flushLatent() {
@@ -1629,8 +2009,37 @@ export class SpiderWorld {
     this.lines = [...map.values()];
   }
 
+  /** Renglones que faltan leer en la vista (modo escaneo), en orden de lectura. */
+  scanCandidates() {
+    this.refreshLines();
+    const u = this.usableRect();
+    return this.lines
+      .filter((L) => {
+        if (L.gone || this.lineClaims.has(L.key) || this.everRead.has(L.key)) return false;
+        if (L.y < u.y - 2 || L.y + L.h > u.y + u.h + 2) return false;
+        return L.x + L.w > u.x + 10 && L.x < u.x + u.w - 10;
+      })
+      .sort((a, b) => (Math.abs(a.y - b.y) < 4 ? a.x - b.x : a.y - b.y));
+  }
+
   pickLine(sp) {
-    if (!this.reader || !this.patrol || !this.active) return null;
+    if (!this.reader || !this.active || this.exiting) return null;
+    if (this.scanMode) {
+      const c = this.scanCandidates();
+      if (!c.length) return null;
+      // El siguiente renglón en orden; entre los tres primeros, el más cercano.
+      let best = c[0], bestScore = Infinity;
+      c.slice(0, 3).forEach((L, i) => {
+        const near = Math.min(Math.hypot(L.x - sp.x, L.y - sp.y), Math.hypot(L.x + L.w - sp.x, L.y - sp.y));
+        const score = i * 220 + near * 0.5;
+        if (score < bestScore) {
+          bestScore = score;
+          best = L;
+        }
+      });
+      return best;
+    }
+    if (!this.patrol) return null;
     this.refreshLines();
     const u = this.usableRect();
     const right = this.usableRight();
@@ -1673,7 +2082,7 @@ export class SpiderWorld {
   }
 
   startTrail(sp, L) {
-    const t = new ReadTrail(L, sp.accent, L.loud);
+    const t = new ReadTrail(L, sp.accent, L.loud, this.scanMode);
     this.under.push(t);
     return t;
   }
@@ -1687,9 +2096,9 @@ export class SpiderWorld {
       if (!r) continue;
       const cy = r.y + r.h / 2;
       if (cy < L.y - 1 || cy > L.y + L.h + 1 || r.x + r.w < L.x - 2 || r.x > L.x + L.w + 2) continue;
-      out.push({ t, rx: r.x + 4 });
+      out.push({ t, x0: r.x, x1: r.x + r.w });
     }
-    return out.sort((a, b) => a.rx - b.rx);
+    return out.sort((a, b) => a.x0 - b.x0);
   }
 
   onWord(sp, word, L) {
@@ -1710,7 +2119,7 @@ export class SpiderWorld {
 
   /** Objetivos escondidos que llevan rato a la vista sin que nadie los lea: se marcan igual. */
   checkLatent() {
-    if (!this.latent.length) return;
+    if (!this.latent.length || this.scanMode) return;
     const v = this.viewRect();
     const timeout = this.liveCount() ? 7 : 0;
     const due = [];
@@ -1728,6 +2137,132 @@ export class SpiderWorld {
     const set = new Set(due);
     this.latent = this.latent.filter((t) => !set.has(t));
     due.forEach((t, i) => this.markOnly(t, i * 0.04));
+  }
+
+  // ---------- Modo escaneo ----------
+
+  /**
+   * Las arañas leen todos los renglones en orden y avisan con 'viewdone' cuando terminaron lo visible,
+   * para que la ventana baje la página (o termine).
+   */
+  setScanMode(on, { region = null, boost = 1 } = {}) {
+    this.scanMode = !!on;
+    this.region = region;
+    this.readBoost = boost;
+    this.viewDoneFired = false;
+    this.scanCheck = 0.4;
+  }
+
+  setRegion(region) {
+    this.region = region;
+    this.viewDoneFired = false;
+    for (const sp of this.spiders) if (sp.state === 'read') sp.endLine(false, false);
+  }
+
+  // ---------- Agujero negro ----------
+
+  portalWorld() {
+    if (!this.portal || this.portal.dead) return null;
+    const c = this.getCamera();
+    return { x: this.portal.x + c.x, y: this.portal.y + c.y, r: Math.max(this.portal.r, this.portal.R * 0.6) };
+  }
+
+  waitFor(cond, timeout = 8, onTimeout = null) {
+    return new Promise((res) => this.waiters.push({ cond, res, t: timeout, onTimeout }));
+  }
+
+  /** Abre el agujero negro en un punto de la pantalla. */
+  openPortal(point, R = 38) {
+    if (this.portal && !this.portal.dead && this.portal.state !== 'closing') {
+      this.portal.x = point.x;
+      this.portal.y = point.y;
+    } else {
+      this.portal = new Portal(point.x, point.y, R);
+    }
+    return this.waitFor(() => !this.portal || this.portal.state === 'open', 3);
+  }
+
+  closePortal() {
+    if (!this.portal || this.portal.dead) return Promise.resolve();
+    this.portal.close();
+    const p = this.portal;
+    return this.waitFor(() => p.dead, 3).then(() => {
+      if (this.portal === p) this.portal = null;
+      this.sparkle(p.x + this.getCamera().x, p.y + this.getCamera().y, COLORS.violet, 8);
+    });
+  }
+
+  /** Las arañas salen del agujero una por una, de un saltito. */
+  emergeFromPortal(n, stagger = 0.3) {
+    const p = this.portalWorld();
+    this.active = true;
+    this.exiting = false;
+    if (!p || this.maxSpiders === 0) return Promise.resolve();
+    const count = Math.max(0, Math.min(n, this.maxSpiders - this.liveCount()));
+    const born = [];
+    for (let i = 0; i < count; i++) {
+      const sp = new Spider(this, p.x, p.y);
+      sp.startEmerge(p, 0.35 + i * stagger);
+      this.spiders.push(sp);
+      born.push(sp);
+    }
+    return this.waitFor(() => born.every((sp) => sp.state !== 'emerge'), 3 + count * stagger);
+  }
+
+  /** Todas vuelven al agujero: caminan, se despiden con una patita y se meten girando. */
+  recallToPortal() {
+    this.exiting = true;
+    this.autoScroll = false;
+    for (const t of this.queue.splice(0)) if (!this.done.has(t.id)) this.markOnly(t);
+    this.claimed.clear();
+    this.flushLatent();
+    const v = this.viewRect();
+    for (const sp of this.spiders) {
+      if (sp.state === 'vanish' || sp.state === 'wave') continue;
+      if (sp.state === 'read') sp.endLine(false, false);
+      if (sp.task) this.release(sp, sp.task);
+      sp.task = null;
+      sp.carry = null;
+      sp.scale = 1;
+      if (sp.state === 'emerge' && sp.delay > 0) {
+        sp.dead = true;
+        continue;
+      }
+      // Las que quedaron lejos aparecen en el borde de la vista para no tardar.
+      sp.x = clamp(sp.x, v.x - 20, v.x + v.w + 20);
+      sp.y = clamp(sp.y, v.y - 20, v.y + v.h + 20);
+      sp.state = 'exit';
+    }
+    this.spiders = this.spiders.filter((sp) => !sp.dead);
+    const p = this.waitFor(() => this.spiders.length === 0, 9, () => {
+      this.spiders = this.spiders.filter((sp) => sp.state !== 'exit' && sp.state !== 'wave' && sp.state !== 'vanish');
+    });
+    this.recallWaiter = this.waiters[this.waiters.length - 1];
+    return p.then(() => {
+      this.exiting = false;
+      this.recallWaiter = null;
+    });
+  }
+
+  /** Cancela la vuelta al agujero (por ejemplo, si empieza otro escaneo). */
+  cancelRecall() {
+    if (this.recallWaiter && !this.recallWaiter.done) {
+      this.recallWaiter.done = true;
+      this.recallWaiter.res();
+    }
+    this.recallWaiter = null;
+    this.waiters = this.waiters.filter((w) => !w.done);
+    this.exiting = false;
+    for (const sp of this.spiders) {
+      if (sp.state === 'exit' || sp.state === 'wave') {
+        sp.state = 'wander';
+        sp.timer = 0.2;
+      }
+    }
+  }
+
+  sparkle(x, y, color, n = 6) {
+    for (let i = 0; i < n; i++) this.sparkles.push(new Sparkle(x, y, color, i === 0 && Math.random() < 0.7));
   }
 
   /** Llama a la araña libre más cercana para que se pose junto a algo (tarjetas de contexto). */
@@ -1810,7 +2345,7 @@ export class SpiderWorld {
     this.found = 0;
     for (const sp of this.spiders) {
       if (sp.state === 'read') sp.endLine(false, false);
-      if (sp.state === 'leave' || sp.state === 'drop') continue;
+      if (['leave', 'drop', 'emerge', 'exit', 'wave', 'vanish'].includes(sp.state)) continue;
       sp.state = 'wander';
       sp.task = null;
       sp.carry = null;
@@ -1858,8 +2393,9 @@ export class SpiderWorld {
     // Las arañas que se quedaron muy lejos de la vista (porque bajaste rápido) vuelven colgadas de un hilo.
     const v = this.viewRect();
     for (const sp of this.spiders) {
-      if (!sp.free || !this.active) continue;
-      const far = sp.y < v.y - v.h * 0.5 || sp.y > v.y + v.h * 1.5 || sp.x < v.x - 200 || sp.x > v.x + v.w + 200;
+      if (!sp.free || !this.active || this.exiting) continue;
+      const k = this.scanMode ? 2.5 : 0.5;
+      const far = sp.y < v.y - v.h * k || sp.y > v.y + v.h * (1 + k) || sp.x < v.x - 200 || sp.x > v.x + v.w + 200;
       if (far) {
         if (sp.state === 'read') sp.endLine(false, false);
         this.startDrop(sp, rand(0, 0.5));
@@ -1869,6 +2405,38 @@ export class SpiderWorld {
 
     for (const sp of this.spiders) sp.update(dt, now);
     this.spiders = this.spiders.filter((s) => !s.dead);
+    if (this.portal) {
+      this.portal.update(dt);
+      if (this.portal.dead && this.portal.state === 'closing' && !this.waiters.length) this.portal = null;
+    }
+    for (const sp of this.sparkles) sp.update(dt);
+    this.sparkles = this.sparkles.filter((s) => !s.dead);
+    if (this.waiters.length) {
+      for (const wt of this.waiters) {
+        wt.t -= dt;
+        if (wt.cond() || wt.t <= 0) {
+          if (wt.t <= 0 && wt.onTimeout) wt.onTimeout();
+          wt.done = true;
+          wt.res();
+        }
+      }
+      this.waiters = this.waiters.filter((wt) => !wt.done);
+    }
+    // ¿Terminaron de leer todo lo visible? (modo escaneo)
+    if (this.scanMode && this.reader && !this.exiting) {
+      this.scanCheck -= dt;
+      if (this.scanCheck <= 0) {
+        this.scanCheck = 0.25;
+        const pending = this.scanCandidates().length;
+        const working = this.spiders.some((s) => ['read', 'seek', 'grab', 'carry', 'emerge', 'drop'].includes(s.state));
+        if (!pending && !working && this.liveCount() > 0) {
+          if (!this.viewDoneFired) {
+            this.viewDoneFired = true;
+            this.emit('viewdone');
+          }
+        } else if (pending) this.viewDoneFired = false;
+      }
+    }
     for (const b of this.boxes) b.update(dt);
     for (const f of this.fx) f.update(dt);
     for (const f of this.under) f.update(dt);
@@ -1937,6 +2505,7 @@ export class SpiderWorld {
 
     const cam = this.getCamera();
     ctx.setTransform(dpr, 0, 0, dpr, -cam.x * dpr, -cam.y * dpr);
+    if (this.frameRect) this.drawFrame(ctx, t, cam);
     for (const s of this.silks) s.draw(ctx);
     for (const b of this.boxes) b.draw(ctx);
     for (const f of this.under) f.draw(ctx);
@@ -1949,7 +2518,14 @@ export class SpiderWorld {
       }
     }
     for (const f of this.fx) f.draw(ctx);
+    if (this.ink || this.portal) {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (this.ink) this.drawInk(ctx, t);
+      if (this.portal) this.portal.draw(ctx, t);
+      ctx.setTransform(dpr, 0, 0, dpr, -cam.x * dpr, -cam.y * dpr);
+    }
     for (const sp of this.spiders) sp.draw(ctx, t);
+    for (const sp of this.sparkles) sp.draw(ctx);
     for (const l of this.labels) l.draw(ctx);
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -1971,6 +2547,51 @@ export class SpiderWorld {
         const x = ((t * 37 + i * 211) % this.w);
         ctx.fillText(`${glyph()}${glyph()}${(Math.random() * 99) | 0}`, x, y - 6);
       }
+    }
+  }
+
+  /** Zona enmarcada (coordenadas del mundo): lo de afuera se oscurece un poco. */
+  drawFrame(ctx, t, cam) {
+    const f = this.frameRect;
+    const v = { x: cam.x, y: cam.y, w: this.w, h: this.h };
+    ctx.fillStyle = 'rgba(3,4,10,0.34)';
+    ctx.fillRect(v.x, v.y, v.w, Math.max(0, f.y - v.y));
+    ctx.fillRect(v.x, f.y + f.h, v.w, Math.max(0, v.y + v.h - f.y - f.h));
+    ctx.fillRect(v.x, f.y, Math.max(0, f.x - v.x), f.h);
+    ctx.fillRect(f.x + f.w, f.y, Math.max(0, v.x + v.w - f.x - f.w), f.h);
+    ctx.save();
+    ctx.strokeStyle = rgba(COLORS.cyan, 0.8);
+    ctx.lineWidth = 1.4;
+    ctx.setLineDash([8, 5]);
+    ctx.lineDashOffset = -t * 18;
+    ctx.strokeRect(f.x + 0.5, f.y + 0.5, f.w - 1, f.h - 1);
+    ctx.setLineDash([]);
+    ctx.font = `600 10.5px ${MONO}`;
+    ctx.fillStyle = COLORS.cyan;
+    ctx.fillText('ZONA DE ESCANEO', f.x + 6, f.y - 7);
+    ctx.restore();
+  }
+
+  /** Borde luminoso de la "tinta" que oscurece la pantalla desde el agujero. */
+  drawInk(ctx, t) {
+    const { x, y, r } = this.ink;
+    if (r < 2) return;
+    const g = ctx.createRadialGradient(x, y, Math.max(0, r - 70), x, y, r + 8);
+    g.addColorStop(0, 'rgba(169,139,255,0)');
+    g.addColorStop(0.72, 'rgba(95,114,255,0.10)');
+    g.addColorStop(0.93, 'rgba(169,139,255,0.30)');
+    g.addColorStop(1, 'rgba(60,240,255,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, r + 8, 0, TAU);
+    ctx.fill();
+    // Chispitas sobre el borde
+    for (let i = 0; i < 40; i++) {
+      const a = i * 2.39996 + t * 0.4;
+      const tw = 0.5 + 0.5 * Math.sin(t * 7 + i * 1.7);
+      const rr = r - 4 + Math.sin(i * 3.1 + t * 2) * 5;
+      ctx.fillStyle = `rgba(220,235,255,${0.75 * tw})`;
+      ctx.fillRect(x + Math.cos(a) * rr - 1, y + Math.sin(a) * rr - 1, 2, 2);
     }
   }
 

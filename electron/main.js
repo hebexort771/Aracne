@@ -15,6 +15,7 @@ import { aiStatus, listModels, complete } from './ai.js';
 import { checkSource } from './sources.js';
 import { loadMemory, listMemory, addMemory, removeMemory, clearMemory } from './memory.js';
 import { loadWeb, fetchImage, normalizeUrl } from './web.js';
+import { inputStatus, scrollDown, unitPx } from './input.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
@@ -22,6 +23,7 @@ const DIST = path.join(ROOT, 'dist');
 const ASSETS = path.join(__dirname, 'assets');
 const DEV_URL = process.env.ARACNE_DEV_URL || null;
 const isMac = process.platform === 'darwin';
+const isLinux = process.platform === 'linux';
 
 if (process.env.ARACNE_USER_DATA) app.setPath('userData', process.env.ARACNE_USER_DATA);
 if (process.platform === 'linux') app.commandLine.appendSwitch('enable-features', 'GlobalShortcutsPortal');
@@ -34,6 +36,10 @@ let lector = null;
 let overlay = null;
 let overlayReady = false;
 let overlayActive = false;
+let overlayState = 'hidden'; // hidden | scanning | docked
+let overlayDisplay = null;
+let captureMode = null; // protect: la capa no sale en la captura · hide: se oculta un instante
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let tray = null;
 let registeredShortcut = null;
 const pendingFiles = [];
@@ -155,6 +161,7 @@ function createOverlay() {
     overlay = null;
     overlayReady = false;
     overlayActive = false;
+    overlayState = 'hidden';
   });
 }
 
@@ -195,6 +202,9 @@ async function openOverlay(testImagePath = null) {
   }
   const jpeg = img.toJPEG(92);
   const { width, height } = img.getSize();
+  overlayDisplay = display;
+  overlay.setIgnoreMouseEvents(false);
+  if (!isLinux) overlay.setOpacity(1);
   overlay.setBounds(display.bounds);
   const payload = {
     image: new Uint8Array(jpeg),
@@ -204,6 +214,7 @@ async function openOverlay(testImagePath = null) {
     bounds: display.bounds,
     settings: publicSettings(),
     shortcut: shortcutLabel(),
+    input: testImagePath ? { ok: false, reason: 'test' } : { ...inputStatus(false), unitPx: unitPx() },
   };
   const send = () => {
     overlay.webContents.send('overlay:open', payload);
@@ -211,26 +222,123 @@ async function openOverlay(testImagePath = null) {
     overlay.focus();
     if (isMac) app.focus({ steal: true });
     overlayActive = true;
+    overlayState = 'scanning';
   };
   if (overlayReady) send();
   else overlay.webContents.once('did-finish-load', () => setTimeout(send, 50));
 }
 
 function closeOverlay() {
-  if (!overlay || !overlayActive) return;
+  if (!overlay || overlayState !== 'scanning') return;
   overlay.webContents.send('overlay:close');
   // Por si la animación de salida no responde.
-  setTimeout(() => hideOverlay(), 900);
+  setTimeout(() => {
+    if (overlayState === 'scanning') hideOverlay();
+  }, 15000);
 }
 
 function hideOverlay() {
   if (overlay && !overlay.isDestroyed() && overlay.isVisible()) overlay.hide();
   overlayActive = false;
+  overlayState = 'hidden';
 }
 
 function toggleOverlay() {
-  if (overlayActive) closeOverlay();
+  // Mientras escanean, el atajo las manda de vuelta al agujero; si no, empieza un escaneo nuevo.
+  if (overlayState === 'scanning') closeOverlay();
   else openOverlay();
+}
+
+/** La capa se encoge a una burbujita (o al panel) para que sigas leyendo en tu aplicación. */
+function setDock(mode) {
+  if (!overlay || overlay.isDestroyed()) return;
+  const display = overlayDisplay || screen.getPrimaryDisplay();
+  if (mode === 'full') {
+    overlay.setBounds(display.bounds);
+    overlayState = 'scanning';
+    return;
+  }
+  const wa = display.workArea;
+  const wasDocked = overlayState === 'docked';
+  overlayState = 'docked';
+  overlayActive = false;
+  overlay.setIgnoreMouseEvents(false);
+  if (mode === 'bubble') overlay.setBounds({ x: wa.x + wa.width - 92, y: wa.y + Math.round(wa.height * 0.4), width: 84, height: 84 });
+  else overlay.setBounds({ x: wa.x + wa.width - 508, y: wa.y + 10, width: 500, height: wa.height - 20 });
+  if (!wasDocked) {
+    // Devuelve el foco a la aplicación donde estabas leyendo.
+    if (isMac) {
+      app.hide();
+      setTimeout(() => overlay && !overlay.isDestroyed() && overlay.showInactive(), 60);
+    } else overlay.blur();
+  }
+}
+
+/** ¿Salió la capa en la captura? (marcas de color en la esquina, o captura toda negra) */
+function overlayInCapture(img, display) {
+  try {
+    const scale = display.scaleFactor || 1;
+    const crop = img.crop({ x: 0, y: 0, width: Math.ceil(16 * scale), height: Math.ceil(8 * scale) });
+    const bmp = crop.toBitmap();
+    const w = crop.getSize().width;
+    const px = (x, y) => {
+      const i = (Math.round(y * scale) * w + Math.round(x * scale)) * 4;
+      return [bmp[i], bmp[i + 1], bmp[i + 2]];
+    };
+    const m = px(3, 3), g = px(11, 3);
+    if (m[0] > 190 && m[1] < 70 && m[2] > 190 && g[0] < 70 && g[1] > 190 && g[2] < 70) return true;
+    const small = img.resize({ width: 64 });
+    const b = small.toBitmap();
+    let sum = 0, sq = 0;
+    const n = b.length / 4;
+    for (let i = 0; i < b.length; i += 4) {
+      const l = (b[i] + b[i + 1] + b[i + 2]) / 3;
+      sum += l;
+      sq += l * l;
+    }
+    const mean = sum / n;
+    return mean < 6 && Math.sqrt(Math.max(0, sq / n - mean * mean)) < 3;
+  } catch {
+    return false;
+  }
+}
+
+/** Captura lo que hay debajo de la capa (para leer la página siguiente). */
+async function captureUnderOverlay() {
+  const display = overlayDisplay || screen.getPrimaryDisplay();
+  let img = null;
+  if (captureMode !== 'hide' && !isLinux) {
+    try {
+      // Solo durante la captura: así tus grabaciones de pantalla sí muestran a las arañas.
+      overlay.setContentProtection(true);
+      img = await captureDisplay(display);
+    } catch (err) {
+      console.warn('captura protegida', err);
+    } finally {
+      overlay.setContentProtection(false);
+    }
+    if (img && !img.isEmpty() && !overlayInCapture(img, display)) captureMode = 'protect';
+    else {
+      captureMode = 'hide';
+      img = null;
+    }
+  }
+  if (!img) {
+    if (isLinux) overlay.hide();
+    else overlay.setOpacity(0);
+    await sleep(230); // que la ventana de abajo termine de pintarse
+    try {
+      img = await captureDisplay(display);
+    } finally {
+      if (isLinux) {
+        overlay.show();
+        overlay.focus();
+      } else overlay.setOpacity(1);
+    }
+  }
+  if (!img || img.isEmpty()) return null;
+  const { width, height } = img.getSize();
+  return { image: new Uint8Array(img.toJPEG(90)), width, height, scale: width / display.bounds.width, mode: captureMode };
 }
 
 function showPermissionHelp() {
@@ -417,9 +525,27 @@ function registerIpc() {
     }
   });
   ipcMain.handle('overlay:activate', () => openOverlay());
+  ipcMain.handle('overlay:capture', () => captureUnderOverlay());
+  ipcMain.handle('overlay:input', (_e, ask) => inputStatus(!!ask));
+  ipcMain.handle('overlay:dock', (_e, mode) => setDock(mode));
+  ipcMain.handle('overlay:scroll', async (_e, { region, units }) => {
+    if (!overlay || overlay.isDestroyed()) return { ok: false, reason: 'closed' };
+    const b = (overlayDisplay || screen.getPrimaryDisplay()).bounds;
+    const r = { x: b.x + region.x, y: b.y + region.y, width: region.w, height: region.h };
+    // La capa deja pasar la rueda a la ventana de abajo mientras tanto.
+    overlay.setIgnoreMouseEvents(true);
+    try {
+      return await scrollDown({ at: { x: r.x + r.width / 2, y: r.y + r.height / 2 }, region: r, units });
+    } finally {
+      setTimeout(() => overlay && !overlay.isDestroyed() && overlayState === 'scanning' && overlay.setIgnoreMouseEvents(false), 80);
+    }
+  });
 
   ipcMain.handle('perm:open-screen-settings', () => {
     if (isMac) shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
+  });
+  ipcMain.handle('perm:open-accessibility', () => {
+    if (isMac) shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility');
   });
   ipcMain.handle('app:relaunch', () => {
     app.relaunch();
@@ -491,6 +617,9 @@ if (!gotLock) {
 
     const testShot = process.env.ARACNE_TEST_SCREENSHOT;
     if (testShot) setTimeout(() => openOverlay(testShot), 1500);
+    // Pruebas: activa la capa con una captura real después de N ms.
+    const testActivate = Number(process.env.ARACNE_TEST_ACTIVATE || 0);
+    if (testActivate) setTimeout(() => openOverlay(), testActivate);
 
     app.on('activate', () => createLector());
   });

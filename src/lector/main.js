@@ -26,16 +26,20 @@ const lensLayer = h('div', { class: 'lens-layer' });
 const hoverCard = h('div', { class: 'hover-card' });
 const loading = h('div', { class: 'loading' });
 const hudText = h('span', { class: 'sh-text' }, '');
-const hudBtn = h('button', { class: 'sh-btn', title: 'Pausar o soltar las arañas', onclick: () => toggleSpiders() }, icon('spider', 14), h('span', {}, 'Pausar'));
+const hudBtn = h('button', { class: 'sh-btn', title: 'Detener o volver a escanear', onclick: () => (scanState && !scanState.finished ? finishScan() : startScan({ fromTop: false })) }, icon('spider', 14), h('span', {}, 'Detener'));
 const spiderHud = h('div', { class: 'spider-hud' }, h('span', { class: 'sh-dot' }), hudText, hudBtn);
-const viewerHost = h('div', { class: 'viewer-host' }, scroller, lensLayer, hoverCard, spiderHud, loading);
+const frameLayer = h('div', { class: 'frame-layer' });
+const bubbleCount = h('span', { class: 'bubble-count' });
+const bubble = h('button', { class: 'lector-bubble', title: 'Mostrar el panel', onclick: () => setPanelHidden(false) }, icon('spider', 24), bubbleCount);
+const viewerHost = h('div', { class: 'viewer-host' }, scroller, lensLayer, frameLayer, hoverCard, spiderHud, bubble, loading);
 const panelMount = h('div', { class: 'panel-mount' });
 
 const actions = {
-  rescan: h('button', { class: 'tb-btn', title: 'Volver a lanzar las arañas', onclick: () => scan() }, icon('scan', 18)),
+  rescan: h('button', { class: 'tb-btn', title: 'Volver a escanear todo el documento', onclick: () => startScan({ fromTop: true }) }, icon('scan', 18)),
+  frame: h('button', { class: 'tb-btn', title: 'Enmarcar: elige la parte que deben escanear', onclick: () => startFraming() }, icon('frame', 18)),
   lens: h('button', { class: 'tb-btn', title: 'Lupa araña: analiza una parte con IA', onclick: () => startLens() }, icon('lens', 18)),
   clear: h('button', { class: 'tb-btn', title: 'Quitar las marcas', onclick: () => world.clearMarks() }, icon('close', 18)),
-  panel: h('button', { class: 'tb-btn', title: 'Mostrar u ocultar el panel', onclick: () => document.body.classList.toggle('no-panel') }, icon('web', 18)),
+  panel: h('button', { class: 'tb-btn', title: 'Mostrar u ocultar el panel', onclick: () => setPanelHidden(!document.body.classList.contains('no-panel')) }, icon('web', 18)),
   settings: h('button', { class: 'tb-btn', title: 'Ajustes', onclick: () => openSettings() }, icon('settings', 18)),
 };
 
@@ -59,41 +63,40 @@ const world = new SpiderWorld({
   decor: 'web',
 });
 world.canvas.style.zIndex = '4';
-world.setPatrol(settings.patrol !== false);
+world.setPatrol(false);
 for (const ev of ['wheel', 'keydown', 'mousedown', 'touchstart']) scroller.addEventListener(ev, () => world.cancelAutoScroll(), { passive: true });
 
-// Cada hallazgo que llega al panel hace parpadear su botón.
+// Cada hallazgo que llega al panel hace parpadear su botón (o la burbujita si el panel está oculto).
 world.on('arrive', (t) => {
   const view = railViewFor(t?.species);
-  const btn = panelMount.querySelector(`.rail-btn[data-view="${view}"]`);
+  const btn = document.body.classList.contains('no-panel') ? bubble : panelMount.querySelector(`.rail-btn[data-view="${view}"]`);
   if (!btn) return;
   btn.classList.remove('ping');
   void btn.offsetWidth;
   btn.classList.add('ping');
 });
+world.on('viewdone', () => turnPage());
+
+function setPanelHidden(hidden) {
+  document.body.classList.toggle('no-panel', hidden);
+}
 
 function railViewFor(species) {
   return species === 'dates' ? 'dates' : species === 'sources' ? 'sources' : species === 'context' ? 'context' : 'overview';
 }
 
-// Marcador en vivo: cuántas arañas, cuánto han leído y cuánto encontraron.
+// Marcador en vivo: página, renglones leídos y hallazgos.
 setInterval(() => {
   const st = world.stats;
-  spiderHud.classList.toggle('paused', !st.active);
-  hudBtn.lastChild.textContent = st.active ? 'Pausar' : 'Soltar arañas';
+  bubbleCount.textContent = st.found ? String(st.found > 99 ? '99+' : st.found) : '';
   if (!current) return;
-  if (!st.active) {
-    hudText.textContent = `ARAÑAS EN PAUSA · ${st.found} HALLAZGOS`;
-    return;
-  }
-  const pct = Math.round(st.progress * 100);
-  hudText.textContent = `${st.spiders} ARAÑAS · ${st.reading ? `${st.reading} LEYENDO · ` : ''}LEÍDO ${pct}% · ${st.found} HALLAZGOS`;
+  const scanning = scanState && !scanState.finished;
+  spiderHud.classList.toggle('paused', !scanning);
+  hudBtn.lastChild.textContent = scanning ? 'Detener' : 'Escanear otra vez';
+  hudText.textContent = scanning
+    ? `LEYENDO · PÁG. ${scanState.pages} · ${st.linesRead} RENGLONES · ${st.found} HALLAZGOS`
+    : `LISTO · ${st.found} HALLAZGOS`;
 }, 300);
-
-function toggleSpiders() {
-  world.setActive(!world.active);
-  toast(world.active ? 'Las arañas vuelven a leer' : 'Arañas en pausa: se quedan las marcas', 'info', 1800);
-}
 
 const panel = new Panel({
   mount: panelMount,
@@ -109,6 +112,7 @@ const panel = new Panel({
     openSettings: (section) => openSettings(section),
     citeMeta: () => current?.meta || null,
     openSource: (url) => openUrl(url),
+    headButtons: () => [h('button', { class: 'btn small icon-only ghost', title: 'Ocultar el panel', onclick: () => setPanelHidden(true) }, icon('hide', 16))],
   },
 });
 let fontScale = 1;
@@ -116,7 +120,6 @@ let fontScale = 1;
 api.on('settings:changed', (s) => {
   settings = s;
   world.setIntensity(s.animation);
-  world.setPatrol(s.patrol !== false);
 });
 
 /** @type {{doc:any, findings:any, viewer:any, meta:any}|null} */
@@ -153,7 +156,7 @@ async function goHome() {
       h('div', { class: 'keys' }, keyTokens(info.shortcut).map((k) => h('kbd', {}, k))),
       h('div', {},
         h('strong', {}, 'En cualquier aplicación'),
-        h('p', { class: 'muted' }, `Pulsa ${info.shortcutLabel} sobre una página, un PDF o lo que estés leyendo y las arañas saldrán a recorrer tu pantalla. Vuelve a pulsarlo o usa Esc para salir.`),
+        h('p', { class: 'muted' }, `Pulsa ${info.shortcutLabel} sobre una página, un PDF o lo que estés leyendo: las arañas salen de un agujero negro, leen todo bajando la página solas y vuelven a esconderse. Pulsa de nuevo o Esc para terminar antes.`),
         info.shortcutOk ? null : h('p', { class: 'warn small' }, 'El atajo no se pudo activar porque otra aplicación lo usa. Cámbialo en Ajustes.')),
       h('button', { class: 'btn small', onclick: () => api.overlay.activate() }, 'Probar ahora')),
     recents.length ? h('div', { class: 'recents' },
@@ -169,11 +172,26 @@ async function goHome() {
   scroller.scrollTop = 0;
   panel.doc = null;
   panel.render();
-  if (world.spiders.length < 4) world.spawn(4 - world.spiders.length);
+  // En la portada salen unas cuantas arañas del agujero a pasear por la telaraña.
+  world.active = true;
+  const homeToken = openToken;
+  if (world.spiders.length < 4 && world.maxSpiders > 0) {
+    await sleep(320); // espera a que el panel termine de esconderse
+    if (homeToken !== openToken) return;
+    const c = { x: viewerHost.clientWidth / 2, y: viewerHost.clientHeight * 0.42 };
+    world.openPortal(c, 30).then(() => world.emergeFromPortal(4 - world.spiders.length, 0.35)).then(() => sleep(400)).then(() => world.closePortal());
+  }
 }
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function closeCurrent() {
   hideHoverCard();
+  scanToken++;
+  scanState = null;
+  world.setScanMode(false);
+  world.setRegion(null);
+  world.frameRect = null;
   world.reset();
   world.setReader(null);
   if (current?.viewer?.destroy) current.viewer.destroy();
@@ -327,8 +345,7 @@ async function afterOpen(doc, viewer, source) {
   panel.setDocument(doc, findings, world);
   panel.show('overview');
   setupHover(doc, findings);
-  world.setReader(doc);
-  scan();
+  startScan({ fromTop: true });
   // Recordar (solo en esta computadora) para la telaraña de memoria.
   if (findings.keywords.length >= 3) {
     api.memory.add({
@@ -359,45 +376,165 @@ function memoryIdFor(viewer, source) {
 
 // ---------------------------------------------------------------- escaneo
 
-let scanWatch = null;
-
 function railPoint(view) {
   return () => {
-    const btn = document.querySelector(`.rail-btn[data-view="${view}"]`);
     const host = viewerHost.getBoundingClientRect();
+    if (document.body.classList.contains('no-panel')) {
+      const r = bubble.getBoundingClientRect();
+      return { x: r.left + r.width / 2 - host.left, y: r.top + r.height / 2 - host.top };
+    }
+    const btn = document.querySelector(`.rail-btn[data-view="${view}"]`);
     if (!btn) return { x: host.width - 10, y: host.height / 2 };
     const r = btn.getBoundingClientRect();
     return { x: host.width - 6, y: Math.min(host.height - 20, Math.max(20, r.top + r.height / 2 - host.top)) };
   };
 }
 
-function scan() {
-  if (!current) return;
-  const { doc, findings } = current;
-  world.reset();
-  const { chosen, rest } = buildTargets(doc, findings, { max: 70 });
-  for (const t of [...chosen, ...rest]) t.carryTo = railPoint(railViewFor(t.species));
-  world.deploy(chosen, { autoScroll: settings.animation !== 'apagada' && settings.animation !== 'baja' });
-  // El resto aparece cuando una araña lee el renglón donde está.
-  world.addLatent(rest);
-  clearInterval(scanWatch);
-  const startedAt = Date.now();
-  let wasBusy = true;
-  scanWatch = setInterval(() => {
-    if (!world.busy && wasBusy && Date.now() - startedAt > 1500) {
-      clearInterval(scanWatch);
-      if (world.autoScroll !== false || scroller.scrollTop > 0) {
-        // Al terminar el rastreo, vuelve al principio para empezar a leer.
-        if (Date.now() - startedAt > 3000 && !userScrolled) scroller.scrollTo({ top: 0, behavior: 'smooth' });
-      }
-    }
-    wasBusy = world.busy;
-  }, 400);
-  userScrolled = false;
+// Escaneo completo: salen del agujero, leen renglón por renglón, bajan la página solas
+// hasta el final (o hasta el fondo de la zona enmarcada) y vuelven a meterse al agujero.
+let scanState = null;
+let scanToken = 0;
+
+function viewCenter() {
+  const z = scanState?.region;
+  if (z) {
+    const y = z.y - scroller.scrollTop + Math.min(z.h, scroller.clientHeight) / 2;
+    return { x: z.x - scroller.scrollLeft + z.w / 2, y: Math.max(60, Math.min(scroller.clientHeight - 60, y)) };
+  }
+  return { x: scroller.clientWidth / 2, y: scroller.clientHeight / 2 };
 }
 
-let userScrolled = false;
-scroller.addEventListener('wheel', () => { userScrolled = true; }, { passive: true });
+async function startScan({ fromTop = true, region = null } = {}) {
+  if (!current) return;
+  const my = ++scanToken;
+  const { doc, findings } = current;
+  world.cancelRecall();
+  world.reset();
+  world.active = true;
+  const words = doc.wordCount ? doc.wordCount() : 1000;
+  const zone = region || (scanState?.region && !fromTop ? scanState.region : null);
+  scanState = { token: my, finished: false, turning: false, pages: 1, region: zone };
+  world.frameRect = zone;
+  world.setScanMode(true, { boost: Math.max(1.4, Math.min(3.2, words / 1200)), region: zone });
+  world.setReader(doc);
+  const { chosen, rest } = buildTargets(doc, findings, { max: 9999 });
+  for (const t of [...chosen, ...rest]) t.carryTo = railPoint(railViewFor(t.species));
+  if (zone) scroller.scrollTop = Math.max(0, zone.y - 40);
+  else if (fromTop) scroller.scrollTop = 0;
+  world.addLatent([...chosen, ...rest]);
+  if (world.maxSpiders === 0) {
+    world.flushLatent();
+    scanState.finished = true;
+    return;
+  }
+  const missing = world.maxSpiders - world.liveCount();
+  if (missing > 0) {
+    await world.openPortal(viewCenter(), 38);
+    if (my !== scanToken) return;
+    await world.emergeFromPortal(missing, 0.22);
+    await sleep(350);
+    if (my === scanToken && !scanState?.finished) world.closePortal();
+  }
+}
+
+function waitScrollEnd() {
+  return new Promise((resolve) => {
+    let last = scroller.scrollTop, still = 0;
+    const iv = setInterval(() => {
+      if (Math.abs(scroller.scrollTop - last) < 1) still++;
+      else still = 0;
+      last = scroller.scrollTop;
+      if (still >= 3) {
+        clearInterval(iv);
+        resolve();
+      }
+    }, 60);
+  });
+}
+
+/** Cuando terminan lo visible, bajan la página (o terminan). */
+async function turnPage() {
+  const st = scanState;
+  if (!st || st.finished || st.turning || st.token !== scanToken) return;
+  const max = scroller.scrollHeight - scroller.clientHeight;
+  const limit = st.region ? Math.min(max, st.region.y + st.region.h - scroller.clientHeight * 0.6) : max;
+  if (settings.autoPage === false || scroller.scrollTop >= limit - 2) {
+    finishScan();
+    return;
+  }
+  st.turning = true;
+  const from = scroller.scrollTop;
+  scroller.scrollTo({ top: Math.min(limit, from + scroller.clientHeight * 0.78), behavior: 'smooth' });
+  await waitScrollEnd();
+  st.turning = false;
+  if (st.token !== scanToken || st.finished) return;
+  if (scroller.scrollTop <= from + 1) {
+    finishScan();
+    return;
+  }
+  st.pages++;
+  world.viewDoneFired = false;
+}
+
+/** Vuelven al agujero negro y desaparecen. */
+async function finishScan() {
+  const st = scanState;
+  if (!st || st.finished) return;
+  st.finished = true;
+  const my = scanToken;
+  world.setScanMode(false);
+  if (world.spiders.length) {
+    await world.openPortal(viewCenter(), 38);
+    if (my !== scanToken) return;
+    await world.recallToPortal();
+    if (my !== scanToken) return;
+    await sleep(150);
+    if (my !== scanToken) return;
+    await world.closePortal();
+  } else world.flushLatent();
+  if (my !== scanToken) return;
+  world.active = false; // ya no salen más hasta el próximo escaneo
+  world.frameRect = null;
+}
+
+// ---------------------------------------------------------------- enmarcar
+
+function startFraming() {
+  if (!current) {
+    toast('Abre un documento primero.', 'warn');
+    return;
+  }
+  frameLayer.classList.add('on');
+  clear(frameLayer, h('div', { class: 'lens-hint frame-hint' }, icon('frame', 16), 'Dibuja el recuadro que deben escanear las arañas · Esc para cancelar'));
+}
+
+function stopFraming() {
+  frameLayer.classList.remove('on');
+  clear(frameLayer);
+}
+
+frameLayer.addEventListener('mousedown', (e) => {
+  if (e.button !== 0) return;
+  const host = viewerHost.getBoundingClientRect();
+  const sx = e.clientX, sy = e.clientY;
+  const box = h('div', { class: 'frame-draft' });
+  frameLayer.appendChild(box);
+  const move = (ev) => Object.assign(box.style, {
+    left: `${Math.min(sx, ev.clientX) - host.left}px`, top: `${Math.min(sy, ev.clientY) - host.top}px`,
+    width: `${Math.abs(ev.clientX - sx)}px`, height: `${Math.abs(ev.clientY - sy)}px`,
+  });
+  const up = (ev) => {
+    window.removeEventListener('mousemove', move);
+    window.removeEventListener('mouseup', up);
+    stopFraming();
+    const w = Math.abs(ev.clientX - sx), hgt = Math.abs(ev.clientY - sy);
+    if (w < 60 || hgt < 40) return;
+    const region = { x: Math.min(sx, ev.clientX) - host.left + scroller.scrollLeft, y: Math.min(sy, ev.clientY) - host.top + scroller.scrollTop, w, h: hgt };
+    startScan({ fromTop: false, region });
+  };
+  window.addEventListener('mousemove', move);
+  window.addEventListener('mouseup', up);
+});
 
 // ---------------------------------------------------------------- tarjetas de contexto al pasar el cursor
 
@@ -650,6 +787,8 @@ window.addEventListener('keydown', (e) => {
   const mod = isMac ? e.metaKey : e.ctrlKey;
   if (e.key === 'Escape') {
     if (lensActive) stopLens();
+    else if (frameLayer.classList.contains('on')) stopFraming();
+    else if (scanState && !scanState.finished) finishScan();
     hideHoverCard();
   }
   if (mod && e.key.toLowerCase() === 'o') {

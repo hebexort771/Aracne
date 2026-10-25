@@ -116,7 +116,7 @@
     <div class="wrap">
       <div class="kicker">Nueve especies de arañas</div>
       <h2>Cada araña tiene un trabajo</h2>
-      <p class="sub">Las cinco primeras funcionan sin internet ni inteligencia artificial. Las demás usan una IA que puedes tener gratis en tu propia computadora. Y ninguna se queda quieta: después del primer rastreo siguen leyendo, renglón por renglón, todo lo que tienes en pantalla.</p>
+      <p class="sub">Las cinco primeras funcionan sin internet ni inteligencia artificial. Las demás usan una IA que puedes tener gratis en tu propia computadora. Leen cada renglón del documento, bajan la página solas y, cuando terminan, vuelven a esconderse en su agujero negro.</p>
       <div class="grid">
         <div class="card"><div class="dot" style="background:rgba(60,240,255,.12);color:var(--cyan)">⟲</div><h3>Verifica fuentes</h3><p>Revisa cada DOI, ISBN, PubMed, arXiv y enlace. Detecta artículos retractados, DOI inventados y enlaces rotos, y arma tu bibliografía APA 7.</p></div>
         <div class="card"><div class="dot" style="background:rgba(255,63,210,.12);color:var(--magenta)">◷</div><h3>Encuentra plazos</h3><p>Saca exámenes, entregas, pagos e inscripciones de sílabos, páginas y correos, y los manda a Google Calendar o a un .ics.</p></div>
@@ -138,8 +138,8 @@
       <h2>Un atajo, en cualquier aplicación</h2>
       <div class="steps">
         <div class="step"><h3>Abre lo que quieras leer</h3><p>Una página en tu navegador, un PDF, un Word, el aula virtual o un correo.</p></div>
-        <div class="step"><h3>Pulsa el atajo</h3><p><span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Espacio</kbd></span> (en Mac <span class="keys"><kbd>⌘</kbd><kbd>⇧</kbd><kbd>Espacio</kbd></span>). La pantalla se invierte, las arañas bajan colgadas de su hilo y empiezan a leer cada renglón.</p></div>
-        <div class="step"><h3>Explora el panel</h3><p>Todo lo que encontraron aparece al costado. Arrastra un recuadro para usar la lupa. <kbd>Esc</kbd> para salir.</p></div>
+        <div class="step"><h3>Pulsa el atajo</h3><p><span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Espacio</kbd></span> (en Mac <span class="keys"><kbd>⌘</kbd><kbd>⇧</kbd><kbd>Espacio</kbd></span>). Se abre un agujero negro, la pantalla se oscurece como tinta y salen las arañas a leer cada renglón, bajando la página solas hasta el final.</p></div>
+        <div class="step"><h3>Vuelven a esconderse</h3><p>Al terminar se meten al agujero y tu pantalla vuelve a la normalidad. Lo que encontraron queda en una burbujita: tócala para abrir el panel. Con <b>Enmarcar</b> eliges qué parte leer.</p></div>
       </div>
       <p class="sub" style="margin-top:22px">¿Prefieres leer dentro de la app? Abre el lector, pega un enlace o arrastra un PDF, Word, imagen o texto.</p>
     </div>
@@ -241,12 +241,22 @@
     const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
     const world = new SpiderWorld({ host: demo, getCamera: () => ({ x: 0, y: scroll.scrollTop - 36 }), setCameraY: (y) => { scroll.scrollTop = y; }, intensity: reduce ? 'apagada' : 'alta' });
     world.maxSpiders = reduce ? 0 : 6;
-    // Después del rastreo, las arañas siguen leyendo renglón por renglón.
+    // Salen de un agujero negro, leen renglón por renglón bajando la página y vuelven a esconderse.
     const reading = new DomDoc({ root: doc, scroller: scroll, host: scroll, kind: 'web', title: 'demo' });
     const color = { c: COLORS.cyan, m: COLORS.magenta, b: COLORS.blue, a: COLORS.amber, r: COLORS.red };
-    function run() {
+    const center = () => ({ x: demo.clientWidth / 2, y: demo.clientHeight / 2 + 18 });
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    let finishing = false;
+    world.on('viewdone', async () => {
+      const max = scroll.scrollHeight - scroll.clientHeight;
+      if (scroll.scrollTop >= max - 2) return finish();
+      scroll.scrollTo({ top: Math.min(max, scroll.scrollTop + scroll.clientHeight * 0.72), behavior: 'smooth' });
+      await wait(800);
+      world.viewDoneFired = false;
+    });
+    async function run() {
+      finishing = false;
       world.reset();
-      world.setReader(reading);
       scroll.scrollTop = 0;
       const hostRect = () => scroll.getBoundingClientRect();
       const targets = [...doc.querySelectorAll('.t')].map((el, i) => ({
@@ -256,10 +266,27 @@
         label: el.dataset.k === 'r' ? (el.textContent.startsWith('10.') ? 'RETRACTADO' : 'ENLACE ROTO') : el.textContent,
         rects: () => { const h = hostRect(); return [...el.getClientRects()].map((r) => ({ x: r.left - h.left, y: r.top - h.top + scroll.scrollTop, w: r.width, h: r.height })); },
       }));
-      world.deploy(targets, { autoScroll: true, maxDuration: 16 });
+      world.setScanMode(true, { boost: 1.8 });
+      world.setReader(reading);
+      world.addLatent(targets);
+      if (!world.maxSpiders) return;
+      await world.openPortal(center(), 28);
+      await world.emergeFromPortal(6, 0.25);
+      await wait(300);
+      world.closePortal();
+    }
+    async function finish() {
+      if (finishing) return;
+      finishing = true;
+      world.setScanMode(false);
+      await world.openPortal(center(), 28);
+      await world.recallToPortal();
+      await wait(200);
+      await world.closePortal();
+      await wait(1800);
+      run();
     }
     run();
-    setInterval(run, 19000);
   </script>
 </body>
 </html>

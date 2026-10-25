@@ -109,11 +109,21 @@ export async function openSettings(section = null) {
     const input = h('input', { type: 'checkbox', checked: value, onchange: (e) => onChange(e.target.checked) });
     return h('label', { class: 'switch' }, input, h('span', { class: 'slider' }), label);
   };
+  // En Mac, mover la rueda en otras aplicaciones necesita el permiso de Accesibilidad.
+  const accessRow = h('div', { class: 'row gap access-row' });
+  if (api.platform === 'darwin') {
+    api.overlay.input(false).then((st) => {
+      clear(accessRow,
+        h('span', { class: st.ok ? 'ok small' : 'warn small' }, st.ok ? '✓ Permiso de Accesibilidad activado' : 'Para que bajen la página en otras aplicaciones, activa Aracne en Accesibilidad.'),
+        st.ok ? null : h('button', { class: 'btn small', onclick: async () => { await api.overlay.input(true); api.perms.openAccessibility(); } }, 'Abrir Accesibilidad'));
+    }).catch(() => {});
+  }
   const animSec = h('section', {},
     h('h3', {}, 'Animación de las arañas'),
     seg('animation', s.animation, [['alta', 'Alta'], ['media', 'Media'], ['baja', 'Baja'], ['apagada', 'Sin arañas']], (v) => api.settings.set({ animation: v })),
     h('p', { class: 'muted small' }, 'Alta: cada palabra que leen se enciende y se decodifica. Media: solo la recuadran. Baja: tres arañas y una línea de lectura.'),
-    toggle('Lectura continua: las arañas siguen leyendo, renglón por renglón, lo que tienes en pantalla', s.patrol !== false, (v) => api.settings.set({ patrol: v })),
+    toggle('Que las arañas bajen la página solas hasta terminar el documento', s.autoPage !== false, (v) => api.settings.set({ autoPage: v })),
+    accessRow,
     h('h3', {}, 'Colores al activar sobre la pantalla'),
     seg('invert', s.invertScreen, [['auto', 'Automático'], ['siempre', 'Invertir siempre'], ['nunca', 'No invertir']], (v) => api.settings.set({ invertScreen: v })),
     h('p', { class: 'muted small' }, 'Automático invierte las páginas claras para que se vean oscuras, como un rastreador.'));

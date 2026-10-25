@@ -1,11 +1,12 @@
-### Novedades de la versión 1.1
+### Novedades de la versión 1.2
 
-- **Las arañas ya no se quedan quietas.** Después del rastreo siguen leyendo lo que tienes en pantalla, renglón por renglón. Cada palabra que pasan se enciende y se decodifica, los títulos se reescriben en monoespaciado y dejan hilos de seda, huellas y paquetes de datos que vuelan al panel.
-- **Entran colgadas de su hilo.** Al abrir el atajo, o si bajas mucho en una página, vuelven a bajar desde arriba.
-- **Leen todo tipo de texto.** Nueva araña de *Datos*: montos, porcentajes, medidas y cifras grandes; personas, lugares e instituciones; definiciones; citas textuales; correos y teléfonos. Aparecen en la tarjeta *Datos clave* del panel.
-- **Marcador en vivo** con cuántas arañas hay, cuánto llevan leído y cuántos hallazgos, y un botón para **pausarlas** o volver a soltarlas.
-- En *Ajustes → Animación* puedes apagar la lectura continua.
-- Arreglado: algunas marcas quedaban corridas a la derecha al abrir el panel.
+- **Agujero negro.** Al activar Aracne se abre un agujero negro, la pantalla se oscurece suavemente como tinta (ya no de golpe) y las arañas salen una por una, de un saltito. Al terminar se despiden con una patita, se meten girando y la pantalla vuelve a la luz.
+- **Leen todo el documento.** Escanean cada renglón en orden y, cuando terminan lo que se ve, **bajan la página solas** en tu aplicación (Chrome, PDF, Word…) hasta llegar al final.
+- **Enmarcar:** dibuja un recuadro para que escaneen solo esa parte.
+- **El panel ya no tapa la lectura:** empieza oculto en una burbujita con el número de hallazgos. Tócala para abrirlo y ocúltalo con » cuando quieras. Al terminar, la burbujita se queda flotando sobre tu aplicación.
+- Lo mismo en el lector: escaneo completo bajando solo, enmarcar, agujero negro y panel ocultable.
+- Mejor lectura (OCR) en pantallas oscuras.
+- En Mac, para bajar la página en otras apps, Aracne pide el permiso de *Accesibilidad*.
 
 ---
 

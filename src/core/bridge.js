@@ -4,7 +4,7 @@ function mockApi() {
   let settings = {
     shortcut: 'CommandOrControl+Shift+Space',
     animation: 'alta',
-    patrol: true,
+    autoPage: true,
     invertScreen: 'auto',
     rememberReading: true,
     openAtLogin: false,
@@ -59,8 +59,8 @@ function mockApi() {
       remove: async () => memory,
       clear: async () => [],
     },
-    overlay: { ready: () => {}, hide: async () => {}, openLector: async () => {}, activate: async () => {} },
-    perms: { openScreenSettings: async () => {}, relaunch: async () => {} },
+    overlay: { ready: () => {}, hide: async () => {}, openLector: async () => {}, activate: async () => {}, capture: async () => null, scroll: async () => ({ ok: false, reason: 'mock' }), input: async () => ({ ok: false, reason: 'mock' }), dock: async () => {} },
+    perms: { openScreenSettings: async () => {}, openAccessibility: async () => {}, relaunch: async () => {} },
     on(channel, cb) {
       (listeners[channel] ||= []).push(cb);
       return () => {};

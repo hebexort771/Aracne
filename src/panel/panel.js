@@ -108,6 +108,20 @@ export class Panel {
     this.computeMemory();
   }
 
+  /** Agrega hallazgos nuevos sin perder lo que ya hiciste en el panel (páginas siguientes). */
+  updateDocument(findings) {
+    this.findings = findings;
+    this.updateBadges();
+    if (['overview', 'sources', 'dates', 'context'].includes(this.view)) this.render();
+    this.verifySources();
+  }
+
+  /** Aviso que aparece arriba de la Telaraña (p. ej. falta un permiso). */
+  setNotice(el) {
+    this.notice = el;
+    if (this.doc && this.view === 'overview') this.render();
+  }
+
   show(view) {
     this.view = view;
     this.unlinkAll();
@@ -204,7 +218,9 @@ export class Panel {
   }
 
   setHead(title, sub = '', actions = []) {
-    clear(this.head, h('div', { class: 'pane-title' }, h('h2', {}, title), sub ? h('p', { class: 'pane-sub' }, sub) : null), actions.length ? h('div', { class: 'pane-actions' }, actions) : null);
+    const extra = this.hooks.headButtons ? this.hooks.headButtons() : [];
+    const all = [...actions, ...extra];
+    clear(this.head, h('div', { class: 'pane-title' }, h('h2', {}, title), sub ? h('p', { class: 'pane-sub' }, sub) : null), all.length ? h('div', { class: 'pane-actions' }, all) : null);
   }
 
   btn(label, onClick, { kind = '', iconName = null, disabled = false, title = null } = {}) {
@@ -338,7 +354,10 @@ export class Panel {
     const keyw = f.keywords.slice(0, 14);
     const keys = keyw.length ? h('div', { class: 'card' }, h('div', { class: 'kicker' }, 'Conceptos que más se repiten'), h('div', { class: 'tags' }, keyw.map(([, , d]) => h('span', { class: 'tag' }, d)))) : null;
 
-    clear(this.body, tiles, this.factsCard(f.general), reading, gist, keys);
+    const toLector = this.hooks.openInLector && this.doc.kind === 'screen'
+      ? h('div', { class: 'row gap' }, this.btn('Abrir este texto en el lector', () => this.hooks.openInLector(), { kind: 'small ghost', iconName: 'reading' }))
+      : null;
+    clear(this.body, this.notice || null, tiles, this.factsCard(f.general), reading, gist, keys, toLector);
   }
 
   /** Lo que la araña de datos sacó de cualquier tipo de texto. */
